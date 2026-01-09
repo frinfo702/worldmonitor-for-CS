@@ -8,3 +8,4 @@ export * from './MonitorPanel';
 export * from './SignalModal';
 export * from './PlaybackControl';
 export * from './StatusPanel';
+export * from './EconomicPanel';

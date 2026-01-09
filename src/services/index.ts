@@ -7,3 +7,4 @@ export * from './velocity';
 export * from './storage';
 export * from './correlation';
 export * from './weather';
+export * from './fred';

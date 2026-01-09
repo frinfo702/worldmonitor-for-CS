@@ -77,7 +77,7 @@ export class StatusPanel {
       this.feeds.set(name, { name, lastUpdate: null, status: 'warning', itemCount: 0 });
     });
 
-    const apiNames = ['RSS2JSON', 'Alpha Vantage', 'CoinGecko', 'Polymarket', 'USGS'];
+    const apiNames = ['RSS2JSON', 'Alpha Vantage', 'CoinGecko', 'Polymarket', 'USGS', 'FRED'];
     apiNames.forEach(name => {
       this.apis.set(name, { name, status: 'warning' });
     });

@@ -10,7 +10,7 @@ import {
   DEFAULT_MAP_LAYERS,
   STORAGE_KEYS,
 } from '@/config';
-import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, initDB, updateBaseline, calculateDeviation, analyzeCorrelations, clusterNews, addToSignalHistory, saveSnapshot, cleanOldSnapshots } from '@/services';
+import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, initDB, updateBaseline, calculateDeviation, analyzeCorrelations, clusterNews, addToSignalHistory, saveSnapshot, cleanOldSnapshots } from '@/services';
 import { loadFromStorage, saveToStorage, ExportPanel } from '@/utils';
 import {
   MapComponent,
@@ -25,6 +25,7 @@ import {
   SignalModal,
   PlaybackControl,
   StatusPanel,
+  EconomicPanel,
 } from '@/components';
 import type { PredictionMarket, MarketData, ClusteredEvent } from '@/types';
 
@@ -41,6 +42,7 @@ export class App {
   private playbackControl: PlaybackControl | null = null;
   private statusPanel: StatusPanel | null = null;
   private exportPanel: ExportPanel | null = null;
+  private economicPanel: EconomicPanel | null = null;
   private latestPredictions: PredictionMarket[] = [];
   private latestMarkets: MarketData[] = [];
   private latestClusters: ClusteredEvent[] = [];
@@ -66,6 +68,7 @@ export class App {
     this.setupPlaybackControl();
     this.setupStatusPanel();
     this.setupExportPanel();
+    this.setupEconomicPanel();
     this.setupEventListeners();
     await this.loadAllData();
     this.setupRefreshIntervals();
@@ -92,6 +95,17 @@ export class App {
     const headerRight = this.container.querySelector('.header-right');
     if (headerRight) {
       headerRight.insertBefore(this.exportPanel.getElement(), headerRight.firstChild);
+    }
+  }
+
+  private setupEconomicPanel(): void {
+    const economicContainer = document.createElement('div');
+    economicContainer.className = 'economic-panel-container';
+    this.economicPanel = new EconomicPanel(economicContainer);
+
+    const main = this.container.querySelector('.main');
+    if (main) {
+      main.appendChild(economicContainer);
     }
   }
 
@@ -507,6 +521,7 @@ export class App {
       this.loadPredictions(),
       this.loadEarthquakes(),
       this.loadWeatherAlerts(),
+      this.loadFredData(),
     ]);
   }
 
@@ -650,6 +665,18 @@ export class App {
     }
   }
 
+  private async loadFredData(): Promise<void> {
+    try {
+      this.economicPanel?.setLoading(true);
+      const data = await fetchFredData();
+      this.economicPanel?.update(data);
+      this.statusPanel?.updateApi('FRED', { status: 'ok' });
+    } catch {
+      this.statusPanel?.updateApi('FRED', { status: 'error' });
+      this.economicPanel?.setLoading(false);
+    }
+  }
+
   private updateMonitorResults(): void {
     const monitorPanel = this.panels['monitors'] as MonitorPanel;
     monitorPanel.renderResults(this.allNews);
@@ -678,5 +705,6 @@ export class App {
     setInterval(() => this.loadPredictions(), REFRESH_INTERVALS.predictions);
     setInterval(() => this.loadEarthquakes(), 5 * 60 * 1000);
     setInterval(() => this.loadWeatherAlerts(), 10 * 60 * 1000);
+    setInterval(() => this.loadFredData(), 30 * 60 * 1000);
   }
 }

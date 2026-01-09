@@ -2213,3 +2213,110 @@ body.playback-mode .status-dot {
   margin-bottom: 8px;
   color: var(--text);
 }
+
+/* Economic Panel */
+.economic-panel-container {
+  position: absolute;
+  bottom: 60px;
+  right: 12px;
+  z-index: 100;
+}
+
+.economic-panel {
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.economic-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.economic-panel .panel-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.economic-panel .panel-source {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+.economic-panel .panel-loading,
+.economic-panel .panel-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.economic-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+}
+
+.economic-indicator {
+  background: var(--surface);
+  padding: 8px 12px;
+}
+
+.indicator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.indicator-name {
+  font-size: 10px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.indicator-id {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+
+.indicator-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.indicator-value .value {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+.indicator-value .change {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.indicator-value .change.positive {
+  color: var(--green);
+}
+
+.indicator-value .change.negative {
+  color: var(--red);
+}
+
+.indicator-date {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}

@@ -1,5 +1,10 @@
 import { API_URLS } from '@/config';
-import { createCircuitBreaker } from '@/utils';
+import {
+  HttpStatusError,
+  createCircuitBreaker,
+  isRetryableFetchError,
+  withExponentialBackoff,
+} from '@/utils';
 
 export interface ArxivPaper {
   id: string;
@@ -77,10 +82,24 @@ export async function fetchArxivPapers(
   maxResults: number = 50
 ): Promise<ArxivPaper[]> {
   return breaker.execute(async () => {
-    const response = await fetch(API_URLS.arxiv(category, maxResults));
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const xmlText = await response.text();
+    const xmlText = await withExponentialBackoff(async () => {
+      const response = await fetch(API_URLS.arxiv(category, maxResults));
+      if (!response.ok) throw new HttpStatusError(response.status);
+      return response.text();
+    }, {
+      maxAttempts: 3,
+      initialDelayMs: 500,
+      factor: 2,
+      maxDelayMs: 5000,
+      jitterRatio: 0.2,
+      shouldRetry: (error) => isRetryableFetchError(error),
+      onRetry: ({ failedAttempt, maxAttempts, delayMs, error }) => {
+        console.warn(
+          `[ArXiv] ${category} attempt ${failedAttempt}/${maxAttempts} failed; retrying in ${delayMs}ms`,
+          error
+        );
+      },
+    });
     return parseArxivXML(xmlText);
   }, []);
 }

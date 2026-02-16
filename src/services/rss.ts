@@ -1,6 +1,12 @@
 import type { Feed, NewsItem } from '@/types';
 import { SITE_VARIANT } from '@/config';
-import { chunkArray, fetchWithProxy } from '@/utils';
+import {
+  HttpStatusError,
+  chunkArray,
+  fetchWithProxy,
+  isRetryableFetchError,
+  withExponentialBackoff,
+} from '@/utils';
 import { classifyByKeyword, classifyWithAI } from './threat-classifier';
 import { inferGeoHubsFromTitle } from './geo-hub-index';
 import { findTopAIOrgByText } from './top-ai-orgs';
@@ -92,19 +98,31 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
   }
 
   try {
-    const response = await fetchWithProxy(feed.url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/xml');
+    const doc = await withExponentialBackoff(async () => {
+      const response = await fetchWithProxy(feed.url);
+      if (!response.ok) throw new HttpStatusError(response.status);
 
-    const parseError = doc.querySelector('parsererror');
-    if (parseError) {
-      console.warn(`Parse error for ${feed.name}`);
-      recordFeedFailure(feed.name);
-      const persistent = await loadPersistentFeed(feed.name);
-      return cached?.items || persistent || [];
-    }
+      const text = await response.text();
+      const parser = new DOMParser();
+      const parsedDoc = parser.parseFromString(text, 'text/xml');
+      if (parsedDoc.querySelector('parsererror')) {
+        throw new Error(`Invalid RSS/Atom XML: ${feed.name}`);
+      }
+      return parsedDoc;
+    }, {
+      maxAttempts: 3,
+      initialDelayMs: 400,
+      factor: 2,
+      maxDelayMs: 4000,
+      jitterRatio: 0.25,
+      shouldRetry: (error) => isRetryableFetchError(error),
+      onRetry: ({ failedAttempt, maxAttempts, delayMs, error }) => {
+        console.warn(
+          `[RSS] ${feed.name} fetch attempt ${failedAttempt}/${maxAttempts} failed; retrying in ${delayMs}ms`,
+          error
+        );
+      },
+    });
 
     let items = doc.querySelectorAll('item');
     const isAtom = items.length === 0;

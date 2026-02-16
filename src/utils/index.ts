@@ -134,4 +134,11 @@ export { buildMapUrl, parseMapUrlState } from './urlState';
 export type { ParsedMapUrlState } from './urlState';
 export { CircuitBreaker, createCircuitBreaker, getCircuitBreakerStatus, getCircuitBreakerCooldownInfo } from './circuit-breaker';
 export type { CircuitBreakerOptions } from './circuit-breaker';
+export {
+  HttpStatusError,
+  isRetryableFetchError,
+  isRetryableHttpStatus,
+  withExponentialBackoff,
+} from './retry';
+export type { ExponentialBackoffOptions, RetryContext } from './retry';
 export * from './analysis-constants';

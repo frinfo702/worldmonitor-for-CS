@@ -1,6 +1,11 @@
 import { API_URLS } from '@/config';
 import type { NewsItem } from '@/types';
-import { createCircuitBreaker } from '@/utils';
+import {
+  HttpStatusError,
+  createCircuitBreaker,
+  isRetryableFetchError,
+  withExponentialBackoff,
+} from '@/utils';
 import { findTopAIOrgByText } from './top-ai-orgs';
 
 export interface AIPaper {
@@ -48,10 +53,24 @@ const breaker = createCircuitBreaker<AIPaperFeed>({ name: 'AI Papers Feed' });
 
 export async function fetchAIPapers(limit = 36): Promise<AIPaperFeed> {
   return breaker.execute(async () => {
-    const response = await fetch(API_URLS.aiPapers(limit));
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const data = await response.json();
+    const data = await withExponentialBackoff(async () => {
+      const response = await fetch(API_URLS.aiPapers(limit));
+      if (!response.ok) throw new HttpStatusError(response.status);
+      return response.json();
+    }, {
+      maxAttempts: 3,
+      initialDelayMs: 500,
+      factor: 2,
+      maxDelayMs: 5000,
+      jitterRatio: 0.2,
+      shouldRetry: (error) => isRetryableFetchError(error),
+      onRetry: ({ failedAttempt, maxAttempts, delayMs, error }) => {
+        console.warn(
+          `[AI Papers] fetch attempt ${failedAttempt}/${maxAttempts} failed; retrying in ${delayMs}ms`,
+          error
+        );
+      },
+    });
     const papers = Array.isArray(data?.papers) ? data.papers : [];
     const activityPoints = Array.isArray(data?.activityPoints) ? data.activityPoints : [];
 

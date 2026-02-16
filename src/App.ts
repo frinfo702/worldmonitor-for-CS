@@ -28,7 +28,6 @@ import {
 import {
   fetchCategoryFeeds,
   fetchMultipleStocks,
-  fetchCrypto,
   fetchPredictions,
   fetchEarthquakes,
   fetchWeatherAlerts,
@@ -64,7 +63,9 @@ import {
   drainTrendingSignals,
   fetchAIPapers,
   mapAIPapersToNewsItems,
+  buildResearchProductHotspots,
 } from "@/services";
+import type { AIPaperFeed } from "@/services/ai-papers";
 import { fetchCountryMarkets } from "@/services/polymarket";
 import { mlWorker } from "@/services/ml-worker";
 import { clusterNewsHybrid } from "@/services/clustering";
@@ -145,7 +146,6 @@ import {
   MarketPanel,
   HeatmapPanel,
   CommoditiesPanel,
-  CryptoPanel,
   PredictionPanel,
   MonitorPanel,
   Panel,
@@ -166,9 +166,6 @@ import {
   RuntimeConfigPanel,
   InsightsPanel,
   TechReadinessPanel,
-  MacroSignalsPanel,
-  ETFFlowsPanel,
-  StablecoinPanel,
   UcdpEventsPanel,
   DisplacementPanel,
   ClimateAnomalyPanel,
@@ -240,6 +237,7 @@ export class App {
   private latestPredictions: PredictionMarket[] = [];
   private latestMarkets: MarketData[] = [];
   private latestClusters: ClusteredEvent[] = [];
+  private latestAIPaperFeed: AIPaperFeed | null = null;
   private isPlaybackMode = false;
   private initialUrlState: ParsedMapUrlState | null = null;
   private inFlight: Set<string> = new Set();
@@ -302,10 +300,17 @@ export class App {
         STORAGE_KEYS.mapLayers,
         defaultLayers,
       );
-      this.panelSettings = loadFromStorage<Record<string, PanelConfig>>(
+      const storedPanelSettings = loadFromStorage<Record<string, PanelConfig>>(
         STORAGE_KEYS.panels,
         DEFAULT_PANELS,
       );
+      this.panelSettings = this.normalizePanelSettings(storedPanelSettings);
+      if (
+        JSON.stringify(storedPanelSettings) !==
+        JSON.stringify(this.panelSettings)
+      ) {
+        saveToStorage(STORAGE_KEYS.panels, this.panelSettings);
+      }
       console.log(
         "[App] Loaded panel settings from storage:",
         Object.entries(this.panelSettings)
@@ -403,7 +408,6 @@ export class App {
         const geoLayers: (keyof MapLayers)[] = [
           "conflicts",
           "bases",
-          "hotspots",
           "nuclear",
           "irradiators",
           "sanctions",
@@ -429,6 +433,21 @@ export class App {
     this.disabledSources = new Set(
       loadFromStorage<string[]>(STORAGE_KEYS.disabledFeeds, []),
     );
+  }
+
+  private normalizePanelSettings(
+    settings: Record<string, PanelConfig>,
+  ): Record<string, PanelConfig> {
+    const normalized: Record<string, PanelConfig> = {};
+
+    Object.entries(DEFAULT_PANELS).forEach(([key, defaults]) => {
+      const saved = settings[key];
+      normalized[key] = saved
+        ? { ...defaults, ...saved, name: defaults.name }
+        : { ...defaults };
+    });
+
+    return normalized;
   }
 
   public async init(): Promise<void> {
@@ -1860,7 +1879,7 @@ export class App {
       liquidity: 0,
     }));
     this.latestPredictions = predictions;
-    (this.panels["polymarket"] as PredictionPanel).renderPredictions(
+    (this.panels["polymarket"] as PredictionPanel | undefined)?.renderPredictions(
       predictions,
     );
 
@@ -1871,25 +1890,6 @@ export class App {
     this.container.innerHTML = `
       <div class="header">
         <div class="header-left">
-          <div class="variant-switcher">
-            <a href="${this.isDesktopApp ? "#" : SITE_VARIANT === "tech" ? "https://worldmonitor.app" : "#"}"
-               class="variant-option ${SITE_VARIANT !== "tech" ? "active" : ""}"
-               data-variant="full"
-               ${!this.isDesktopApp && SITE_VARIANT === "tech" ? 'target="_blank" rel="noopener"' : ""}
-               title="Geopolitical Intelligence${SITE_VARIANT !== "tech" ? " (current)" : ""}">
-              <span class="variant-icon">🌍</span>
-              <span class="variant-label">WORLD</span>
-            </a>
-            <span class="variant-divider"></span>
-            <a href="${this.isDesktopApp ? "#" : SITE_VARIANT === "tech" ? "#" : "https://tech.worldmonitor.app"}"
-               class="variant-option ${SITE_VARIANT === "tech" ? "active" : ""}"
-               data-variant="tech"
-               ${!this.isDesktopApp && SITE_VARIANT !== "tech" ? 'target="_blank" rel="noopener"' : ""}
-               title="Tech & AI Intelligence${SITE_VARIANT === "tech" ? " (current)" : ""}">
-              <span class="variant-icon">💻</span>
-              <span class="variant-label">TECH</span>
-            </a>
-          </div>
           <span class="logo">MONITOR</span><span class="version">v${__APP_VERSION__}</span>
           <a href="https://x.com/eliehabib" target="_blank" rel="noopener" class="credit-link">
             <svg class="x-logo" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
@@ -1928,7 +1928,7 @@ export class App {
         <div class="map-section" id="mapSection">
           <div class="panel-header">
             <div class="panel-header-left">
-              <span class="panel-title">${SITE_VARIANT === "tech" ? "Global Tech" : "Global Situation"}</span>
+              <span class="panel-title">Global Tech</span>
             </div>
             <button class="map-pin-btn" id="mapPinBtn" title="Pin map to top">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2161,11 +2161,15 @@ export class App {
     this.newsPanels["finance"] = financePanel;
     this.panels["finance"] = financePanel;
 
-    const heatmapPanel = new HeatmapPanel();
-    this.panels["heatmap"] = heatmapPanel;
+    if (this.panelSettings["heatmap"]) {
+      const heatmapPanel = new HeatmapPanel();
+      this.panels["heatmap"] = heatmapPanel;
+    }
 
-    const marketsPanel = new MarketPanel();
-    this.panels["markets"] = marketsPanel;
+    if (this.panelSettings["markets"]) {
+      const marketsPanel = new MarketPanel();
+      this.panels["markets"] = marketsPanel;
+    }
 
     const monitorPanel = new MonitorPanel(this.monitors);
     this.panels["monitors"] = monitorPanel;
@@ -2178,8 +2182,10 @@ export class App {
     const commoditiesPanel = new CommoditiesPanel();
     this.panels["commodities"] = commoditiesPanel;
 
-    const predictionPanel = new PredictionPanel();
-    this.panels["polymarket"] = predictionPanel;
+    if (this.panelSettings["polymarket"]) {
+      const predictionPanel = new PredictionPanel();
+      this.panels["polymarket"] = predictionPanel;
+    }
 
     const govPanel = new NewsPanel("gov", "Government / Policy");
     this.attachRelatedAssetHandlers(govPanel);
@@ -2190,9 +2196,6 @@ export class App {
     this.attachRelatedAssetHandlers(intelPanel);
     this.newsPanels["intel"] = intelPanel;
     this.panels["intel"] = intelPanel;
-
-    const cryptoPanel = new CryptoPanel();
-    this.panels["crypto"] = cryptoPanel;
 
     const middleeastPanel = new NewsPanel("middleeast", "Middle East / MENA");
     this.attachRelatedAssetHandlers(middleeastPanel);
@@ -2216,6 +2219,30 @@ export class App {
     this.attachRelatedAssetHandlers(aiPapersPanel);
     this.newsPanels["ai-papers"] = aiPapersPanel;
     this.panels["ai-papers"] = aiPapersPanel;
+
+    const researchLabsPanel = new NewsPanel(
+      "research-labs",
+      "AI Labs & Frontier Models",
+    );
+    this.attachRelatedAssetHandlers(researchLabsPanel);
+    this.newsPanels["research-labs"] = researchLabsPanel;
+    this.panels["research-labs"] = researchLabsPanel;
+
+    const researchUniversitiesPanel = new NewsPanel(
+      "research-universities",
+      "University AI Research",
+    );
+    this.attachRelatedAssetHandlers(researchUniversitiesPanel);
+    this.newsPanels["research-universities"] = researchUniversitiesPanel;
+    this.panels["research-universities"] = researchUniversitiesPanel;
+
+    const researchBenchmarksPanel = new NewsPanel(
+      "research-benchmarks",
+      "Conferences & Benchmarks",
+    );
+    this.attachRelatedAssetHandlers(researchBenchmarksPanel);
+    this.newsPanels["research-benchmarks"] = researchBenchmarksPanel;
+    this.panels["research-benchmarks"] = researchBenchmarksPanel;
 
     // Tech variant panels
     const startupsPanel = new NewsPanel("startups", "Startups & VC");
@@ -2400,11 +2427,6 @@ export class App {
     // Tech Readiness Panel (tech variant only - World Bank tech indicators)
     const techReadinessPanel = new TechReadinessPanel();
     this.panels["tech-readiness"] = techReadinessPanel;
-
-    // Crypto & Market Intelligence Panels
-    this.panels["macro-signals"] = new MacroSignalsPanel();
-    this.panels["etf-flows"] = new ETFFlowsPanel();
-    this.panels["stablecoins"] = new StablecoinPanel();
 
     // AI Insights Panel (desktop only - hides itself on mobile)
     const insightsPanel = new InsightsPanel();
@@ -2664,22 +2686,6 @@ export class App {
 
     // Sources modal
     this.setupSourcesModal();
-
-    // Variant switcher: switch variant locally on desktop (reload with new config)
-    if (this.isDesktopApp) {
-      this.container
-        .querySelectorAll<HTMLAnchorElement>(".variant-option")
-        .forEach((link) => {
-          link.addEventListener("click", (e) => {
-            const variant = link.dataset.variant;
-            if (variant && variant !== SITE_VARIANT) {
-              e.preventDefault();
-              localStorage.setItem("worldmonitor-variant", variant);
-              window.location.reload();
-            }
-          });
-        });
-    }
 
     // Fullscreen toggle
     const fullscreenBtn = document.getElementById("fullscreenBtn");
@@ -3098,14 +3104,6 @@ export class App {
     const tasks: Array<{ name: string; task: Promise<void> }> = [
       { name: "news", task: runGuarded("news", () => this.loadNews()) },
       {
-        name: "markets",
-        task: runGuarded("markets", () => this.loadMarkets()),
-      },
-      {
-        name: "predictions",
-        task: runGuarded("predictions", () => this.loadPredictions()),
-      },
-      {
         name: "pizzint",
         task: runGuarded("pizzint", () => this.loadPizzInt()),
       },
@@ -3116,6 +3114,25 @@ export class App {
         task: runGuarded("spending", () => this.loadGovernmentSpending()),
       },
     ];
+
+    const hasMarketPanels = Boolean(
+      this.panelSettings["markets"] ||
+        this.panelSettings["heatmap"] ||
+        this.panelSettings["commodities"],
+    );
+    if (hasMarketPanels) {
+      tasks.push({
+        name: "markets",
+        task: runGuarded("markets", () => this.loadMarkets()),
+      });
+    }
+
+    if (this.panelSettings["polymarket"]) {
+      tasks.push({
+        name: "predictions",
+        task: runGuarded("predictions", () => this.loadPredictions()),
+      });
+    }
 
     // Load intelligence signals for CII calculation (protests, military, outages)
     // Only for geopolitical variant - tech variant doesn't need CII/focal points
@@ -3200,6 +3217,11 @@ export class App {
     this.map?.setLayerLoading(layer, true);
     try {
       switch (layer) {
+        case "hotspots":
+          if (SITE_VARIANT === "tech") {
+            this.refreshResearchProductHotspots();
+          }
+          break;
         case "natural":
           await this.loadNatural();
           break;
@@ -3415,14 +3437,14 @@ export class App {
 
   private async loadAIPapers(): Promise<NewsItem[]> {
     const panel = this.newsPanels["ai-papers"];
-    if (!panel) return [];
 
     try {
       const feed = await fetchAIPapers(40);
+      this.latestAIPaperFeed = feed;
       const items = mapAIPapersToNewsItems(feed.papers);
 
       if (items.length === 0) {
-        panel.showError("No papers available");
+        panel?.showError("No papers available");
         this.statusPanel?.updateFeed("AI Papers", {
           status: "warning",
           itemCount: 0,
@@ -3430,15 +3452,16 @@ export class App {
         return [];
       }
 
-      panel.renderNews(items);
-
-      const baseline = await updateBaseline("news:ai-papers", items.length);
-      const deviation = calculateDeviation(items.length, baseline);
-      panel.setDeviation(
-        deviation.zScore,
-        deviation.percentChange,
-        deviation.level,
-      );
+      if (panel) {
+        panel.renderNews(items);
+        const baseline = await updateBaseline("news:ai-papers", items.length);
+        const deviation = calculateDeviation(items.length, baseline);
+        panel.setDeviation(
+          deviation.zScore,
+          deviation.percentChange,
+          deviation.level,
+        );
+      }
 
       this.statusPanel?.updateFeed("AI Papers", {
         status: "ok",
@@ -3451,7 +3474,8 @@ export class App {
 
       return items;
     } catch (error) {
-      panel.showError("Failed to load AI papers");
+      this.latestAIPaperFeed = null;
+      panel?.showError("Failed to load AI papers");
       this.statusPanel?.updateFeed("AI Papers", {
         status: "error",
         errorMessage: String(error),
@@ -3461,6 +3485,19 @@ export class App {
       });
       return [];
     }
+  }
+
+  private refreshResearchProductHotspots(): void {
+    if (SITE_VARIANT !== "tech") return;
+
+    const hotspots = buildResearchProductHotspots(
+      this.latestAIPaperFeed,
+      this.allNews,
+      { maxHotspots: 30, maxItemsPerHotspot: 10 },
+    );
+
+    this.map?.setResearchProductHotspots(hotspots);
+    this.map?.setLayerReady("hotspots", hotspots.length > 0);
   }
 
   private async loadNews(): Promise<void> {
@@ -3477,6 +3514,15 @@ export class App {
       { key: "energy", feeds: FEEDS.energy },
       { key: "layoffs", feeds: FEEDS.layoffs },
       { key: "ai", feeds: FEEDS.ai },
+      { key: "research-labs", feeds: FEEDS["research-labs"] },
+      {
+        key: "research-universities",
+        feeds: FEEDS["research-universities"],
+      },
+      {
+        key: "research-benchmarks",
+        feeds: FEEDS["research-benchmarks"],
+      },
       { key: "thinktanks", feeds: FEEDS.thinktanks },
       // Tech variant categories
       { key: "startups", feeds: FEEDS.startups },
@@ -3574,7 +3620,11 @@ export class App {
       .catch(() => {});
 
     // Update map hotspots
-    this.map?.updateHotspotActivity(this.allNews);
+    if (SITE_VARIANT === "tech") {
+      this.refreshResearchProductHotspots();
+    } else {
+      this.map?.updateHotspotActivity(this.allNews);
+    }
 
     // Update monitors
     this.updateMonitorResults();
@@ -3614,16 +3664,22 @@ export class App {
   }
 
   private async loadMarkets(): Promise<void> {
+    const marketPanel = this.panels["markets"] as MarketPanel | undefined;
+    const heatmapPanel = this.panels["heatmap"] as HeatmapPanel | undefined;
+    const commoditiesPanel = this.panels["commodities"] as
+      | CommoditiesPanel
+      | undefined;
+
     try {
       // Stocks
       const stocks = await fetchMultipleStocks(MARKET_SYMBOLS, {
         onBatch: (partialStocks) => {
           this.latestMarkets = partialStocks;
-          (this.panels["markets"] as MarketPanel).renderMarkets(partialStocks);
+          marketPanel?.renderMarkets(partialStocks);
         },
       });
       this.latestMarkets = stocks;
-      (this.panels["markets"] as MarketPanel).renderMarkets(stocks);
+      marketPanel?.renderMarkets(stocks);
       this.statusPanel?.updateApi("Finnhub", { status: "ok" });
 
       // Sectors
@@ -3631,20 +3687,20 @@ export class App {
         SECTORS.map((s) => ({ ...s, display: s.name })),
         {
           onBatch: (partialSectors) => {
-            (this.panels["heatmap"] as HeatmapPanel).renderHeatmap(
+            heatmapPanel?.renderHeatmap(
               partialSectors.map((s) => ({ name: s.name, change: s.change })),
             );
           },
         },
       );
-      (this.panels["heatmap"] as HeatmapPanel).renderHeatmap(
+      heatmapPanel?.renderHeatmap(
         sectors.map((s) => ({ name: s.name, change: s.change })),
       );
 
       // Commodities
       const commodities = await fetchMultipleStocks(COMMODITIES, {
         onBatch: (partialCommodities) => {
-          (this.panels["commodities"] as CommoditiesPanel).renderCommodities(
+          commoditiesPanel?.renderCommodities(
             partialCommodities.map((c) => ({
               display: c.display,
               price: c.price,
@@ -3654,7 +3710,7 @@ export class App {
           );
         },
       });
-      (this.panels["commodities"] as CommoditiesPanel).renderCommodities(
+      commoditiesPanel?.renderCommodities(
         commodities.map((c) => ({
           display: c.display,
           price: c.price,
@@ -3666,23 +3722,17 @@ export class App {
       this.statusPanel?.updateApi("Finnhub", { status: "error" });
     }
 
-    try {
-      // Crypto
-      const crypto = await fetchCrypto();
-      (this.panels["crypto"] as CryptoPanel).renderCrypto(crypto);
-      this.statusPanel?.updateApi("CoinGecko", { status: "ok" });
-    } catch {
-      this.statusPanel?.updateApi("CoinGecko", { status: "error" });
-    }
   }
 
   private async loadPredictions(): Promise<void> {
+    const predictionPanel = this.panels["polymarket"] as
+      | PredictionPanel
+      | undefined;
+
     try {
       const predictions = await fetchPredictions();
       this.latestPredictions = predictions;
-      (this.panels["polymarket"] as PredictionPanel).renderPredictions(
-        predictions,
-      );
+      predictionPanel?.renderPredictions(predictions);
 
       this.statusPanel?.updateFeed("Polymarket", {
         status: "ok",
@@ -4803,22 +4853,31 @@ export class App {
   }
 
   private setupRefreshIntervals(): void {
-    // Always refresh news, markets, predictions, pizzint
+    // Always refresh news and shared telemetry panels
     this.scheduleRefresh(
       "news",
       () => this.loadNews(),
       REFRESH_INTERVALS.feeds,
     );
-    this.scheduleRefresh(
-      "markets",
-      () => this.loadMarkets(),
-      REFRESH_INTERVALS.markets,
+    const hasMarketPanels = Boolean(
+      this.panelSettings["markets"] ||
+        this.panelSettings["heatmap"] ||
+        this.panelSettings["commodities"],
     );
-    this.scheduleRefresh(
-      "predictions",
-      () => this.loadPredictions(),
-      REFRESH_INTERVALS.predictions,
-    );
+    if (hasMarketPanels) {
+      this.scheduleRefresh(
+        "markets",
+        () => this.loadMarkets(),
+        REFRESH_INTERVALS.markets,
+      );
+    }
+    if (this.panelSettings["polymarket"]) {
+      this.scheduleRefresh(
+        "predictions",
+        () => this.loadPredictions(),
+        REFRESH_INTERVALS.predictions,
+      );
+    }
     this.scheduleRefresh("pizzint", () => this.loadPizzInt(), 10 * 60 * 1000);
 
     // Only refresh layer data if layer is enabled

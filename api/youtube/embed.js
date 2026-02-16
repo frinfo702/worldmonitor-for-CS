@@ -5,6 +5,12 @@ function parseFlag(value, fallback = '1') {
   return fallback;
 }
 
+function sanitizeCaptionLang(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return /^[A-Za-z-]{2,10}$/.test(trimmed) ? trimmed : null;
+}
+
 function sanitizeVideoId(value) {
   if (typeof value !== 'string') return null;
   return /^[A-Za-z0-9_-]{11}$/.test(value) ? value : null;
@@ -45,6 +51,8 @@ export default async function handler(request) {
 
   const autoplay = parseFlag(url.searchParams.get('autoplay'), '1');
   const mute = parseFlag(url.searchParams.get('mute'), '1');
+  const captions = parseFlag(url.searchParams.get('captions'), '1');
+  const captionLang = sanitizeCaptionLang(url.searchParams.get('cc_lang'));
 
   const origin = sanitizeOrigin(url.searchParams.get('origin'));
 
@@ -55,6 +63,10 @@ export default async function handler(request) {
   embedSrc.searchParams.set('rel', '0');
   embedSrc.searchParams.set('controls', '1');
   embedSrc.searchParams.set('enablejsapi', '1');
+  embedSrc.searchParams.set('cc_load_policy', captions);
+  if (captionLang) {
+    embedSrc.searchParams.set('cc_lang_pref', captionLang);
+  }
   embedSrc.searchParams.set('origin', origin);
   embedSrc.searchParams.set('widget_referrer', origin);
 
@@ -85,7 +97,7 @@ export default async function handler(request) {
       player=new YT.Player('player',{
         videoId:'${videoId}',
         host:'https://www.youtube-nocookie.com',
-        playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:${JSON.stringify(origin)},widget_referrer:${JSON.stringify(origin)}},
+        playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,cc_load_policy:${captions}${captionLang ? `,cc_lang_pref:${JSON.stringify(captionLang)}` : ''},origin:${JSON.stringify(origin)},widget_referrer:${JSON.stringify(origin)}},
         events:{
           onReady:function(){
             window.parent.postMessage({type:'yt-ready'},'*');

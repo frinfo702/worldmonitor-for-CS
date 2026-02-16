@@ -32,3 +32,4 @@ export * from './oil-analytics';
 export { generateSummary } from './summarization';
 export * from './cached-theater-posture';
 export * from './ai-papers';
+export * from './research-product-hotspots';

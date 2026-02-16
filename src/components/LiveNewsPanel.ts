@@ -1,5 +1,5 @@
 import { Panel } from './Panel';
-import { fetchLiveVideoId } from '@/services/live-news';
+import { fetchLatestChannelVideos } from '@/services/live-news';
 import { isDesktopRuntime, getRemoteApiBaseUrl } from '@/services/runtime';
 
 // YouTube IFrame Player API types
@@ -23,6 +23,7 @@ type YouTubePlayerConstructor = new (
     events: {
       onReady: () => void;
       onError?: (event: { data: number }) => void;
+      onStateChange?: (event: { data: number }) => void;
     };
   },
 ) => YouTubePlayer;
@@ -42,39 +43,33 @@ interface LiveChannel {
   id: string;
   name: string;
   handle: string; // YouTube channel handle (e.g., @bloomberg)
-  fallbackVideoId?: string; // Fallback if no live stream detected
-  videoId?: string; // Dynamically fetched live video ID
-  isLive?: boolean;
-  useFallbackOnly?: boolean; // Skip auto-detection, always use fallback
+  channelId?: string; // Optional explicit YouTube channel ID (UC...)
+  videoId?: string; // Dynamically fetched latest uploaded video ID
+  recentVideoIds?: string[];
 }
 
-const SITE_VARIANT = import.meta.env.VITE_VARIANT || 'full';
-
-// Full variant: World news channels (24/7 live streams)
-const FULL_LIVE_CHANNELS: LiveChannel[] = [
-  { id: 'bloomberg', name: 'Bloomberg', handle: '@Bloomberg', fallbackVideoId: 'iEpJwprxDdk' },
-  { id: 'sky', name: 'SkyNews', handle: '@SkyNews', fallbackVideoId: 'YDvsBbKfLPA' },
-  { id: 'euronews', name: 'Euronews', handle: '@euabortnews', fallbackVideoId: 'pykpO5kQJ98' },
-  { id: 'dw', name: 'DW', handle: '@DWNews', fallbackVideoId: 'LuKwFajn37U' },
-  { id: 'cnbc', name: 'CNBC', handle: '@CNBC', fallbackVideoId: '9NyxcX3rhQs' },
-  { id: 'france24', name: 'France24', handle: '@FRANCE24English', fallbackVideoId: 'Ap-UM1O9RBU' },
-  { id: 'alarabiya', name: 'AlArabiya', handle: '@AlArabiya', fallbackVideoId: 'n7eQejkXbnM', useFallbackOnly: true },
-  { id: 'aljazeera', name: 'AlJazeera', handle: '@AlJazeeraEnglish', fallbackVideoId: 'gCNeDWCI0vo', useFallbackOnly: true },
+// Curated channels for latest long-form AI/tech interviews.
+// Add more entries here as needed.
+const LATEST_VIDEO_CHANNELS: LiveChannel[] = [
+  {
+    id: 'lex-fridman',
+    name: 'Lex Fridman',
+    handle: '@lexfridman',
+    channelId: 'UCJIfeSCssxSC_Dhc5s7woww',
+  },
+  {
+    id: 'dwarkesh-patel',
+    name: 'Dwarkesh Patel',
+    handle: '@dwarkeshpatel',
+    channelId: 'UCZa18YV7qayTh-MRIrBhDpA',
+  },
 ];
-
-// Tech variant: Tech & business channels
-const TECH_LIVE_CHANNELS: LiveChannel[] = [
-  { id: 'bloomberg', name: 'Bloomberg', handle: '@Bloomberg', fallbackVideoId: 'iEpJwprxDdk' },
-  { id: 'yahoo', name: 'Yahoo Finance', handle: '@YahooFinance', fallbackVideoId: 'KQp-e_XQnDE' },
-  { id: 'cnbc', name: 'CNBC', handle: '@CNBC', fallbackVideoId: '9NyxcX3rhQs' },
-  { id: 'nasa', name: 'NASA TV', handle: '@NASA', fallbackVideoId: 'fO9e9jnhYK8', useFallbackOnly: true },
-];
-
-const LIVE_CHANNELS = SITE_VARIANT === 'tech' ? TECH_LIVE_CHANNELS : FULL_LIVE_CHANNELS;
 
 export class LiveNewsPanel extends Panel {
+  private static readonly RECENT_WINDOW_DAYS = 14;
   private static apiPromise: Promise<void> | null = null;
-  private activeChannel: LiveChannel = LIVE_CHANNELS[0]!;
+  private activeChannel: LiveChannel =
+    LATEST_VIDEO_CHANNELS[Math.floor(Math.random() * LATEST_VIDEO_CHANNELS.length)]!;
   private channelSwitcher: HTMLElement | null = null;
   private isMuted = true;
   private isPlaying = true;
@@ -94,17 +89,16 @@ export class LiveNewsPanel extends Panel {
   private isPlayerReady = false;
   private currentVideoId: string | null = null;
   private readonly youtubeOrigin: string | null;
-  private forceFallbackVideoForNextInit = false;
-
   // Desktop fallback: embed via cloud bridge page to avoid YouTube 153.
   // Starts false — try native JS API first; switches to true on Error 153.
   private useDesktopEmbedProxy = false;
   private desktopEmbedIframe: HTMLIFrameElement | null = null;
   private desktopEmbedRenderToken = 0;
   private boundMessageHandler!: (e: MessageEvent) => void;
+  private isSelectingNextVideo = false;
 
   constructor() {
-    super({ id: 'live-news', title: 'Live News', showCount: false, trackActivity: false });
+    super({ id: 'live-news', title: 'Featured Videos', showCount: false, trackActivity: false });
     this.youtubeOrigin = LiveNewsPanel.resolveYouTubeOrigin();
     this.playerElementId = `live-news-player-${Date.now()}`;
     this.element.classList.add('panel-wide');
@@ -132,12 +126,11 @@ export class LiveNewsPanel extends Panel {
         this.syncDesktopEmbedState();
       } else if (msg.type === 'yt-error') {
         const code = Number(msg.code ?? 0);
-        if (code === 153 && this.activeChannel.fallbackVideoId &&
-            this.activeChannel.videoId !== this.activeChannel.fallbackVideoId) {
-          this.activeChannel.videoId = this.activeChannel.fallbackVideoId;
-          this.renderDesktopEmbed(true);
-        } else {
-          this.showEmbedError(this.activeChannel, code);
+        this.showEmbedError(this.activeChannel, code);
+      } else if (msg.type === 'yt-state') {
+        const state = Number(msg.state ?? -1);
+        if (state === 0) {
+          void this.handleVideoEnded();
         }
       }
     };
@@ -145,9 +138,7 @@ export class LiveNewsPanel extends Panel {
   }
 
   private static resolveYouTubeOrigin(): string | null {
-    const fallbackOrigin = SITE_VARIANT === 'tech'
-      ? 'https://worldmonitor.app'
-      : 'https://worldmonitor.app';
+    const fallbackOrigin = 'https://worldmonitor.app';
 
     try {
       const { protocol, origin, host } = window.location;
@@ -255,7 +246,7 @@ export class LiveNewsPanel extends Panel {
   private updateLiveIndicator(): void {
     if (!this.liveBtn) return;
     this.liveBtn.innerHTML = this.isPlaying
-      ? '<span class="live-dot"></span>Live'
+      ? '<span class="live-dot"></span>Playing'
       : '<span class="live-dot paused"></span>Paused';
     this.liveBtn.classList.toggle('paused', !this.isPlaying);
   }
@@ -299,7 +290,7 @@ export class LiveNewsPanel extends Panel {
     this.channelSwitcher = document.createElement('div');
     this.channelSwitcher.className = 'live-news-switcher';
 
-    LIVE_CHANNELS.forEach(channel => {
+    LATEST_VIDEO_CHANNELS.forEach(channel => {
       const btn = document.createElement('button');
       btn.className = `live-channel-btn ${channel.id === this.activeChannel.id ? 'active' : ''}`;
       btn.dataset.channelId = channel.id;
@@ -311,21 +302,77 @@ export class LiveNewsPanel extends Panel {
     this.element.insertBefore(this.channelSwitcher, this.content);
   }
 
-  private async resolveChannelVideo(channel: LiveChannel, forceFallback = false): Promise<void> {
-    const useFallbackVideo = channel.useFallbackOnly || forceFallback;
-    const liveVideoId = useFallbackVideo ? null : await fetchLiveVideoId(channel.handle);
-    channel.videoId = liveVideoId || channel.fallbackVideoId;
-    channel.isLive = !!liveVideoId;
+  private setActiveChannel(channel: LiveChannel): void {
+    this.activeChannel = channel;
+    this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
+      const btnEl = btn as HTMLElement;
+      const isActive = btnEl.dataset.channelId === channel.id;
+      btnEl.classList.toggle('active', isActive);
+      if (isActive) btnEl.classList.remove('offline');
+    });
+  }
+
+  private async resolveChannelVideo(channel: LiveChannel): Promise<void> {
+    const latest = await fetchLatestChannelVideos(
+      channel.handle,
+      channel.channelId,
+      LiveNewsPanel.RECENT_WINDOW_DAYS,
+    );
+    channel.videoId = latest.videoId ?? undefined;
+    channel.recentVideoIds = latest.recentVideoIds;
+  }
+
+  private async pickRandomRecentVideo(
+    excludeVideoId?: string | null,
+  ): Promise<{ channel: LiveChannel; videoId: string } | null> {
+    await Promise.all(LATEST_VIDEO_CHANNELS.map((channel) => this.resolveChannelVideo(channel)));
+
+    const candidates: Array<{ channel: LiveChannel; videoId: string }> = [];
+    for (const channel of LATEST_VIDEO_CHANNELS) {
+      const ids = channel.recentVideoIds && channel.recentVideoIds.length > 0
+        ? channel.recentVideoIds
+        : channel.videoId
+          ? [channel.videoId]
+          : [];
+      for (const id of ids) {
+        if (excludeVideoId && id === excludeVideoId) continue;
+        candidates.push({ channel, videoId: id });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+    const index = Math.floor(Math.random() * candidates.length);
+    return candidates[index] ?? null;
+  }
+
+  private async handleVideoEnded(): Promise<void> {
+    if (this.isSelectingNextVideo) return;
+    this.isSelectingNextVideo = true;
+
+    try {
+      const next = await this.pickRandomRecentVideo(this.currentVideoId);
+      if (!next) return;
+
+      next.channel.videoId = next.videoId;
+      this.setActiveChannel(next.channel);
+
+      if (this.useDesktopEmbedProxy) {
+        this.renderDesktopEmbed(true);
+      } else {
+        this.syncPlayerState();
+      }
+    } finally {
+      this.isSelectingNextVideo = false;
+    }
   }
 
   private async switchChannel(channel: LiveChannel): Promise<void> {
     if (channel.id === this.activeChannel.id) return;
 
-    this.activeChannel = channel;
+    this.setActiveChannel(channel);
 
     this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
       const btnEl = btn as HTMLElement;
-      btnEl.classList.toggle('active', btnEl.dataset.channelId === channel.id);
       if (btnEl.dataset.channelId === channel.id) {
         btnEl.classList.add('loading');
       }
@@ -364,7 +411,7 @@ export class LiveNewsPanel extends Panel {
     this.content.innerHTML = `
       <div class="live-offline">
         <div class="offline-icon">📺</div>
-        <div class="offline-text">${channel.name} is not currently live</div>
+        <div class="offline-text">Latest video for ${channel.name} is unavailable right now</div>
         <button class="offline-retry" onclick="this.closest('.panel').querySelector('.live-channel-btn.active')?.click()">Retry</button>
       </div>
     `;
@@ -373,12 +420,12 @@ export class LiveNewsPanel extends Panel {
   private showEmbedError(channel: LiveChannel, errorCode: number): void {
     const watchUrl = channel.videoId
       ? `https://www.youtube.com/watch?v=${encodeURIComponent(channel.videoId)}`
-      : `https://www.youtube.com/${channel.handle}`;
+      : `https://www.youtube.com/${channel.handle}/videos`;
 
     this.content.innerHTML = `
       <div class="live-offline">
         <div class="offline-icon">!</div>
-        <div class="offline-text">${channel.name} cannot be embedded in this app (YouTube ${errorCode})</div>
+        <div class="offline-text">${channel.name} latest video cannot be embedded in this app (YouTube ${errorCode})</div>
         <a class="offline-retry" href="${watchUrl}" target="_blank" rel="noopener noreferrer">Open on YouTube</a>
       </div>
     `;
@@ -410,6 +457,7 @@ export class LiveNewsPanel extends Panel {
       videoId,
       autoplay: this.isPlaying ? '1' : '0',
       mute: this.isMuted ? '1' : '0',
+      captions: '1',
     });
     if (origin) params.set('origin', origin);
     return `/api/youtube/embed?${params.toString()}`;
@@ -472,7 +520,7 @@ export class LiveNewsPanel extends Panel {
     const iframe = document.createElement('iframe');
     iframe.className = 'live-news-embed-frame';
     iframe.src = embedUrl;
-    iframe.title = `${this.activeChannel.name} live feed`;
+    iframe.title = `${this.activeChannel.name} latest video`;
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = '0';
@@ -531,10 +579,7 @@ export class LiveNewsPanel extends Panel {
 
   private async initializePlayer(): Promise<void> {
     if (!this.useDesktopEmbedProxy && this.player) return;
-
-    const useFallbackVideo = this.activeChannel.useFallbackOnly || this.forceFallbackVideoForNextInit;
-    this.forceFallbackVideoForNextInit = false;
-    await this.resolveChannelVideo(this.activeChannel, useFallbackVideo);
+    await this.resolveChannelVideo(this.activeChannel);
 
     if (!this.activeChannel.videoId) {
       this.showOfflineMessage(this.activeChannel);
@@ -557,6 +602,7 @@ export class LiveNewsPanel extends Panel {
         mute: this.isMuted ? 1 : 0,
         rel: 0,
         playsinline: 1,
+        cc_load_policy: 1,
         enablejsapi: 1,
         ...(this.youtubeOrigin
           ? {
@@ -573,21 +619,14 @@ export class LiveNewsPanel extends Panel {
           if (iframe) iframe.referrerPolicy = 'strict-origin-when-cross-origin';
           this.syncPlayerState();
         },
+        onStateChange: (event) => {
+          const state = Number(event?.data ?? -1);
+          if (state === 0) {
+            void this.handleVideoEnded();
+          }
+        },
         onError: (event) => {
           const errorCode = Number(event?.data ?? 0);
-
-          // Retry once with known fallback stream.
-          if (
-            errorCode === 153 &&
-            this.activeChannel.fallbackVideoId &&
-            this.activeChannel.videoId !== this.activeChannel.fallbackVideoId
-          ) {
-            this.destroyPlayer();
-            this.forceFallbackVideoForNextInit = true;
-            this.ensurePlayerContainer();
-            void this.initializePlayer();
-            return;
-          }
 
           // Desktop-specific last resort: switch to cloud bridge embed.
           if (errorCode === 153 && isDesktopRuntime()) {

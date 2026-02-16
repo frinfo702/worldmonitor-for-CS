@@ -39,10 +39,10 @@ export const DESKTOP_PARITY_FEATURES: DesktopParityFeature[] = [
     id: 'live-news',
     panel: 'LiveNewsPanel',
     serviceFiles: ['src/services/live-news.ts'],
-    apiRoutes: ['/api/youtube/live'],
-    apiHandlers: ['api/youtube/live.js'],
+    apiRoutes: ['/api/youtube/latest'],
+    apiHandlers: ['api/youtube/latest.js'],
     locality: 'fully-local',
-    fallback: 'Channel fallback video IDs are used when live detection fails.',
+    fallback: 'Selected creator channel falls back to direct YouTube page when latest-video lookup fails.',
     priority: 1,
   },
   {

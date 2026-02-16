@@ -28,6 +28,7 @@ import type {
   DisplacementFlow,
   ClimateAnomaly,
   CyberThreat,
+  ResearchProductHotspot,
 } from '@/types';
 import type { WeatherAlert } from '@/services/weather';
 
@@ -269,6 +270,14 @@ export class MapContainer {
       this.deckGLMap?.setTechEvents(events);
     } else {
       this.svgMap?.setTechEvents(events);
+    }
+  }
+
+  public setResearchProductHotspots(hotspots: ResearchProductHotspot[]): void {
+    if (this.useDeckGL) {
+      this.deckGLMap?.setResearchProductHotspots(hotspots);
+    } else {
+      this.svgMap?.setResearchProductHotspots(hotspots);
     }
   }
 

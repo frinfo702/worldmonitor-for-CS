@@ -81,8 +81,8 @@ export function getRemoteApiBaseUrl(): string {
     return normalizeBaseUrl(configuredRemoteBase);
   }
 
-  const variant = import.meta.env.VITE_VARIANT || 'full';
-  return DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.full ?? 'https://worldmonitor.app';
+  const variant = import.meta.env.VITE_VARIANT || 'tech';
+  return DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.tech ?? 'https://tech.worldmonitor.app';
 }
 
 export function toRuntimeUrl(path: string): string {

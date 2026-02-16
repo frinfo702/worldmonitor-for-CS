@@ -550,6 +550,32 @@ export interface MapLayers {
   techEvents: boolean;
 }
 
+export type ResearchProductItemType = 'paper' | 'product';
+
+export interface ResearchProductHotspotItem {
+  id: string;
+  type: ResearchProductItemType;
+  title: string;
+  source: string;
+  link: string;
+  publishedAt: string;
+  confidence: number;
+  locationHint?: string;
+}
+
+export interface ResearchProductHotspot {
+  id: string;
+  name: string;
+  country: string;
+  lat: number;
+  lon: number;
+  paperCount: number;
+  productCount: number;
+  activityScore: number;
+  intensity: number;
+  items: ResearchProductHotspotItem[];
+}
+
 export interface AIDataCenter {
   id: string;
   name: string;

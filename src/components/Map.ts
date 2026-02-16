@@ -3,7 +3,7 @@ import * as topojson from 'topojson-client';
 import { escapeHtml } from '@/utils/sanitize';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { Feature, Geometry } from 'geojson';
-import type { MapLayers, Hotspot, NewsItem, Earthquake, InternetOutage, RelatedAsset, AssetType, AisDisruptionEvent, AisDensityZone, CableAdvisory, RepairShip, SocialUnrestEvent, AirportDelayAlert, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, CyberThreat } from '@/types';
+import type { MapLayers, Hotspot, NewsItem, Earthquake, InternetOutage, RelatedAsset, AssetType, AisDisruptionEvent, AisDensityZone, CableAdvisory, RepairShip, SocialUnrestEvent, AirportDelayAlert, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, CyberThreat, ResearchProductHotspot } from '@/types';
 import type { TechHubActivity } from '@/services/tech-activity';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import { getNaturalEventIcon } from '@/services/eonet';
@@ -3226,6 +3226,31 @@ export class MapComponent {
 
   public setTechEvents(events: TechEventMarker[]): void {
     this.techEvents = events;
+    this.render();
+  }
+
+  public setResearchProductHotspots(hotspots: ResearchProductHotspot[]): void {
+    this.hotspots = hotspots.map((hub) => {
+      const level: 'low' | 'elevated' | 'high' =
+        hub.intensity >= 0.67 ? 'high' : hub.intensity >= 0.35 ? 'elevated' : 'low';
+      const escalationScore = (Math.max(1, Math.min(5, Math.round(hub.intensity * 4) + 1)) as 1 | 2 | 3 | 4 | 5);
+      const topLabels = hub.items.slice(0, 4).map(item => item.title);
+
+      return {
+        id: hub.id,
+        name: hub.name,
+        lat: hub.lat,
+        lon: hub.lon,
+        keywords: [],
+        level,
+        escalationScore,
+        subtext: `${hub.country} · Papers ${hub.paperCount} / Products ${hub.productCount}`,
+        location: `${hub.name}, ${hub.country}`,
+        status: 'Active',
+        description: `Activity score ${hub.activityScore.toFixed(1)} based on recent papers and product news`,
+        agencies: topLabels,
+      };
+    });
     this.render();
   }
 

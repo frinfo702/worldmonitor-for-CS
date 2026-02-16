@@ -36,6 +36,7 @@ import type {
   MapTechEventCluster,
   MapDatacenterCluster,
   CyberThreat,
+  ResearchProductHotspot,
 } from '@/types';
 import { ArcLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
@@ -218,6 +219,7 @@ export class DeckGLMap {
   private ucdpEvents: UcdpGeoEvent[] = [];
   private displacementFlows: DisplacementFlow[] = [];
   private climateAnomalies: ClimateAnomaly[] = [];
+  private researchProductHotspots: ResearchProductHotspot[] = [];
 
   // Country highlight state
   private countryGeoJsonLoaded = false;
@@ -840,9 +842,15 @@ export class DeckGLMap {
       layers.push(this.createSpaceportsLayer());
     }
 
-    // Hotspots layer (all hotspots including high/breaking, with pulse + ghost)
+    // Hotspots layer: geopolitical hotspots (full) or research/product hubs (tech)
     if (mapLayers.hotspots) {
-      layers.push(...this.createHotspotsLayers());
+      if (SITE_VARIANT === 'tech') {
+        if (this.researchProductHotspots.length > 0) {
+          layers.push(...this.createResearchProductHotspotsLayers());
+        }
+      } else {
+        layers.push(...this.createHotspotsLayers());
+      }
     }
 
     // Datacenters layer - SQUARE icons at zoom >= 5, cluster dots at zoom < 5
@@ -1926,6 +1934,57 @@ export class DeckGLMap {
     return layers;
   }
 
+  private createResearchProductHotspotsLayers(): Layer[] {
+    const layers: Layer[] = [];
+    const zoom = this.maplibreMap?.getZoom() || 2;
+    const radiusMaxPixels = 18 + Math.round(Math.min(20, zoom * 2));
+
+    layers.push(new ScatterplotLayer<ResearchProductHotspot>({
+      id: 'hotspots-layer',
+      data: this.researchProductHotspots,
+      getPosition: (d) => [d.lon, d.lat],
+      getRadius: (d) => 14000 + d.activityScore * 5200,
+      radiusMinPixels: 7,
+      radiusMaxPixels,
+      getFillColor: (d) => {
+        const total = Math.max(1, d.paperCount + d.productCount);
+        const paperRatio = d.paperCount / total;
+        const intensity = Math.max(0, Math.min(1, d.intensity));
+
+        const red = Math.round(90 + 140 * intensity);
+        const green = Math.round(120 + 80 * paperRatio);
+        const blue = Math.round(255 - 140 * intensity);
+        return [red, green, blue, 188] as [number, number, number, number];
+      },
+      stroked: true,
+      getLineColor: [255, 255, 255, 200],
+      lineWidthMinPixels: 1.4,
+      pickable: true,
+    }));
+
+    layers.push(this.createGhostLayer('hotspots-layer', this.researchProductHotspots, d => [d.lon, d.lat], { radiusMinPixels: 16 }));
+
+    layers.push(new TextLayer<ResearchProductHotspot>({
+      id: 'hotspots-count-labels',
+      data: this.researchProductHotspots,
+      getText: (d) => String(d.paperCount + d.productCount),
+      getPosition: (d) => [d.lon, d.lat],
+      getColor: [255, 255, 255, 240],
+      getSize: 12,
+      getPixelOffset: [0, -12],
+      getTextAnchor: 'middle',
+      getAlignmentBaseline: 'center',
+      background: true,
+      getBackgroundColor: [0, 0, 0, 150],
+      backgroundPadding: [4, 2, 4, 2],
+      pickable: false,
+      fontFamily: 'system-ui, sans-serif',
+      fontWeight: 700,
+    }));
+
+    return layers;
+  }
+
   private pulseTime = 0;
 
   private canPulse(now = Date.now()): boolean {
@@ -2073,6 +2132,11 @@ export class DeckGLMap {
 
     switch (layerId) {
       case 'hotspots-layer':
+        if (SITE_VARIANT === 'tech') {
+          return {
+            html: `<div class="deckgl-tooltip"><strong>${text(obj.name || 'Research/Product Hub')}</strong><br/>Papers ${text(obj.paperCount || 0)} · Products ${text(obj.productCount || 0)}</div>`,
+          };
+        }
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.subtext)}</div>` };
       case 'earthquakes-layer':
         return { html: `<div class="deckgl-tooltip"><strong>M${(obj.magnitude || 0).toFixed(1)} Earthquake</strong><br/>${text(obj.place)}</div>` };
@@ -2200,6 +2264,17 @@ export class DeckGLMap {
 
     // Hotspots show popup with related news
     if (layerId === 'hotspots-layer') {
+      if (SITE_VARIANT === 'tech') {
+        const hub = info.object as ResearchProductHotspot;
+        this.popup.show({
+          type: 'researchProductHub',
+          data: hub,
+          x: info.x,
+          y: info.y,
+        });
+        return;
+      }
+
       const hotspot = info.object as Hotspot;
       const relatedNews = this.getRelatedNews(hotspot);
       this.popup.show({
@@ -2454,17 +2529,14 @@ export class DeckGLMap {
 
     const layerConfig = SITE_VARIANT === 'tech'
       ? [
+          { key: 'hotspots', label: 'Research/Product Hubs', icon: '&#128300;' },
           { key: 'startupHubs', label: 'Startup Hubs', icon: '&#128640;' },
           { key: 'techHQs', label: 'Tech HQs', icon: '&#127970;' },
           { key: 'accelerators', label: 'Accelerators', icon: '&#9889;' },
           { key: 'cloudRegions', label: 'Cloud Regions', icon: '&#9729;' },
           { key: 'datacenters', label: 'AI Data Centers', icon: '&#128421;' },
-          { key: 'cables', label: 'Undersea Cables', icon: '&#128268;' },
-          { key: 'outages', label: 'Internet Outages', icon: '&#128225;' },
           { key: 'cyberThreats', label: 'Cyber Threats', icon: '&#128737;' },
           { key: 'techEvents', label: 'Tech Events', icon: '&#128197;' },
-          { key: 'natural', label: 'Natural Events', icon: '&#127755;' },
-          { key: 'fires', label: 'Fires', icon: '&#128293;' },
         ]
       : [
           { key: 'hotspots', label: 'Intel Hotspots', icon: '&#127919;' },
@@ -2565,7 +2637,8 @@ export class DeckGLMap {
       </div>
       <div class="layer-help-content">
         <div class="layer-help-section">
-          <div class="layer-help-title">Tech Ecosystem</div>
+          <div class="layer-help-title">Research & Products</div>
+          <div class="layer-help-item"><span>HOTSPOTS</span> Trending paper/product activity hubs (bubble size = activity)</div>
           <div class="layer-help-item"><span>STARTUPHUBS</span> Major startup ecosystems (SF, NYC, London, etc.)</div>
           <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS, Azure, GCP data center regions</div>
           <div class="layer-help-item"><span>TECHHQS</span> Headquarters of major tech companies</div>
@@ -2573,15 +2646,13 @@ export class DeckGLMap {
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Infrastructure</div>
-          <div class="layer-help-item"><span>CABLES</span> Major undersea fiber optic cables (internet backbone)</div>
           <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs</div>
-          <div class="layer-help-item"><span>OUTAGES</span> Internet blackouts and service disruptions</div>
+          <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS/Azure/GCP deployment regions</div>
         </div>
         <div class="layer-help-section">
-          <div class="layer-help-title">Natural & Economic</div>
-          <div class="layer-help-item"><span>NATURAL</span> Earthquakes, storms, fires (may affect data centers)</div>
-          <div class="layer-help-item"><span>WEATHER</span> Severe weather alerts</div>
-          <div class="layer-help-item"><span>ECONOMIC</span> Stock exchanges & central banks</div>
+          <div class="layer-help-title">Other</div>
+          <div class="layer-help-item"><span>CYBERTHREATS</span> Geo-located IOC infrastructure</div>
+          <div class="layer-help-item"><span>TECHEVENTS</span> Upcoming conferences and product events</div>
           <div class="layer-help-item"><span>COUNTRIES</span> Country name overlays</div>
         </div>
       </div>
@@ -2678,6 +2749,7 @@ export class DeckGLMap {
 
     const legendItems = SITE_VARIANT === 'tech'
       ? [
+          { shape: shapes.circle('rgb(120, 180, 255)'), label: 'Research/Product Hub' },
           { shape: shapes.circle('rgb(0, 255, 150)'), label: 'Startup Hub' },
           { shape: shapes.circle('rgb(100, 200, 255)'), label: 'Tech HQ' },
           { shape: shapes.circle('rgb(255, 200, 0)'), label: 'Accelerator' },
@@ -2982,6 +3054,11 @@ export class DeckGLMap {
     this.render();
   }
 
+  public setResearchProductHotspots(hotspots: ResearchProductHotspot[]): void {
+    this.researchProductHotspots = hotspots;
+    this.render();
+  }
+
   public setUcdpEvents(events: UcdpGeoEvent[]): void {
     this.ucdpEvents = events;
     this.render();
@@ -3225,6 +3302,21 @@ export class DeckGLMap {
 
   // Trigger click methods - show popup at item location without moving the map
   public triggerHotspotClick(id: string): void {
+    if (SITE_VARIANT === 'tech') {
+      const hub = this.researchProductHotspots.find(h => h.id === id);
+      if (!hub) return;
+
+      const screenPos = this.projectToScreen(hub.lat, hub.lon);
+      const { x, y } = screenPos || this.getContainerCenter();
+      this.popup.show({
+        type: 'researchProductHub',
+        data: hub,
+        x,
+        y,
+      });
+      return;
+    }
+
     const hotspot = this.hotspots.find(h => h.id === id);
     if (!hotspot) return;
 

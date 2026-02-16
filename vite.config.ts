@@ -55,8 +55,8 @@ const VARIANT_META: Record<string, {
 };
 
 function htmlVariantPlugin(): Plugin {
-  const variant = process.env.VITE_VARIANT || 'full';
-  const meta = VARIANT_META[variant] || VARIANT_META.full;
+  const variant = process.env.VITE_VARIANT || 'tech';
+  const meta = VARIANT_META[variant] || VARIANT_META.tech;
 
   return {
     name: 'html-variant',
@@ -138,9 +138,9 @@ export default defineConfig({
       ],
 
       manifest: {
-        name: 'World Monitor - Real-Time Global Intelligence',
-        short_name: 'WorldMonitor',
-        description: 'AI-powered real-time global intelligence dashboard',
+        name: 'Tech Monitor - Real-Time AI & Tech Industry Dashboard',
+        short_name: 'TechMonitor',
+        description: 'AI-powered real-time tech and startup intelligence dashboard',
         start_url: '/',
         scope: '/',
         display: 'standalone',

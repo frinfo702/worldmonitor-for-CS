@@ -492,6 +492,30 @@ const TECH_FEEDS: Record<string, Feed[]> = {
     { name: 'Anthropic News', url: rss('https://news.google.com/rss/search?q=Anthropic+Claude+AI+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'OpenAI News', url: rss('https://news.google.com/rss/search?q=OpenAI+ChatGPT+GPT-4+when:7d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  'research-labs': [
+    { name: 'OpenAI Research', url: rss('https://news.google.com/rss/search?q=(site:openai.com/research+OR+"OpenAI+research")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Anthropic Research', url: rss('https://news.google.com/rss/search?q=(site:anthropic.com/research+OR+"Anthropic+research")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Google DeepMind Research', url: rss('https://news.google.com/rss/search?q=("Google+DeepMind"+research+OR+site:deepmind.google)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Meta AI Research', url: rss('https://news.google.com/rss/search?q=("Meta+AI"+research+OR+site:ai.meta.com/blog)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Microsoft Research AI', url: rss('https://news.google.com/rss/search?q=("Microsoft+Research"+AI+OR+site:microsoft.com/research)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'NVIDIA Research', url: rss('https://news.google.com/rss/search?q=("NVIDIA+Research"+AI+OR+site:research.nvidia.com)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'xAI / Mistral / Cohere', url: rss('https://news.google.com/rss/search?q=(xAI+OR+Mistral+AI+OR+Cohere)+model+OR+research+when:7d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'research-universities': [
+    { name: 'Stanford HAI', url: rss('https://news.google.com/rss/search?q=(site:hai.stanford.edu+OR+"Stanford+HAI")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'MIT CSAIL', url: rss('https://news.google.com/rss/search?q=(site:csail.mit.edu+OR+"MIT+CSAIL"+AI)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Berkeley AI Research', url: rss('https://news.google.com/rss/search?q=("Berkeley+AI+Research"+OR+site:bair.berkeley.edu)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'CMU ML Research', url: rss('https://news.google.com/rss/search?q=("Carnegie+Mellon"+machine+learning+research)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Oxford AI', url: rss('https://news.google.com/rss/search?q=(Oxford+AI+research+OR+site:ox.ac.uk+artificial+intelligence)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'ETH Zurich AI', url: rss('https://news.google.com/rss/search?q=(ETH+Zurich+AI+research+OR+site:ethz.ch+machine+learning)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'research-benchmarks': [
+    { name: 'NeurIPS / ICLR / ICML', url: rss('https://news.google.com/rss/search?q=(NeurIPS+OR+ICLR+OR+ICML)+paper+OR+acceptance+OR+workshop+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'LLM Benchmarks', url: rss('https://news.google.com/rss/search?q=(LLM+benchmark+OR+"language+model+evaluation"+OR+"AI+leaderboard")+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Chatbot Arena', url: rss('https://news.google.com/rss/search?q=("Chatbot+Arena"+OR+"LMSYS")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Hugging Face Leaderboards', url: rss('https://news.google.com/rss/search?q=("Hugging+Face"+leaderboard+OR+"Open+LLM+Leaderboard")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Papers with Code SOTA', url: rss('https://news.google.com/rss/search?q=("Papers+with+Code"+OR+SOTA)+machine+learning+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
   startups: [
     { name: 'TechCrunch Startups', url: rss('https://techcrunch.com/category/startups/feed/') },
     { name: 'VentureBeat', url: rss('https://venturebeat.com/feed/') },
@@ -570,11 +594,6 @@ const TECH_FEEDS: Record<string, Feed[]> = {
     { name: 'Dev Events', url: rss('https://dev.events/rss.xml') },
     { name: 'Open Source News', url: rss('https://news.google.com/rss/search?q="open+source"+project+release+OR+launch+when:3d&hl=en-US&gl=US&ceid=US:en') },
   ],
-  ipo: [
-    { name: 'IPO News', url: rss('https://news.google.com/rss/search?q=(IPO+OR+"initial+public+offering"+OR+SPAC)+tech+when:7d&hl=en-US&gl=US&ceid=US:en') },
-    { name: 'Renaissance IPO', url: rss('https://news.google.com/rss/search?q=site:renaissancecapital.com+IPO+when:14d&hl=en-US&gl=US&ceid=US:en') },
-    { name: 'Tech IPO News', url: rss('https://news.google.com/rss/search?q=tech+IPO+OR+"tech+company"+IPO+when:7d&hl=en-US&gl=US&ceid=US:en') },
-  ],
   funding: [
     { name: 'SEC Filings', url: rss('https://news.google.com/rss/search?q=(S-1+OR+"IPO+filing"+OR+"SEC+filing")+startup+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'VC News', url: rss('https://news.google.com/rss/search?q=("Series+A"+OR+"Series+B"+OR+"Series+C"+OR+"funding+round"+OR+"venture+capital")+when:7d&hl=en-US&gl=US&ceid=US:en') },
@@ -587,12 +606,6 @@ const TECH_FEEDS: Record<string, Feed[]> = {
   outages: [
     { name: 'AWS Status', url: rss('https://news.google.com/rss/search?q=AWS+outage+OR+"Amazon+Web+Services"+down+when:1d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Cloud Outages', url: rss('https://news.google.com/rss/search?q=(Azure+OR+GCP+OR+Cloudflare+OR+Slack+OR+GitHub)+outage+OR+down+when:1d&hl=en-US&gl=US&ceid=US:en') },
-  ],
-  security: [
-    { name: 'Krebs Security', url: rss('https://krebsonsecurity.com/feed/') },
-    { name: 'The Hacker News', url: rss('https://feeds.feedburner.com/TheHackersNews') },
-    { name: 'Dark Reading', url: rss('https://www.darkreading.com/rss.xml') },
-    { name: 'Schneier', url: rss('https://www.schneier.com/feed/') },
   ],
   policy: [
     // US Policy
@@ -631,12 +644,6 @@ const TECH_FEEDS: Record<string, Feed[]> = {
     { name: 'China Tech Analysis', url: rss('https://news.google.com/rss/search?q=("China+tech+strategy"+OR+"Chinese+AI"+OR+"China+semiconductor")+analysis+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'DigiChina', url: rss('https://news.google.com/rss/search?q=site:digichina.stanford.edu+when:14d&hl=en-US&gl=US&ceid=US:en') },
   ],
-  finance: [
-    { name: 'CNBC Tech', url: rss('https://www.cnbc.com/id/19854910/device/rss/rss.html') },
-    { name: 'MarketWatch Tech', url: rss('https://feeds.marketwatch.com/marketwatch/topstories/') },
-    { name: 'Yahoo Finance', url: rss('https://finance.yahoo.com/rss/topstories') },
-    { name: 'Seeking Alpha Tech', url: rss('https://seekingalpha.com/market_currents.xml') },
-  ],
   hardware: [
     { name: "Tom's Hardware", url: rss('https://www.tomshardware.com/feeds/all') },
     { name: 'SemiAnalysis', url: rss('https://www.semianalysis.com/feed') },
@@ -651,10 +658,6 @@ const TECH_FEEDS: Record<string, Feed[]> = {
     { name: 'Dev.to', url: rss('https://dev.to/feed') },
     { name: 'Lobsters', url: rss('https://lobste.rs/rss') },
     { name: 'Changelog', url: rss('https://changelog.com/feed') },
-  ],
-  layoffs: [
-    { name: 'Layoffs.fyi', url: rss('https://news.google.com/rss/search?q=tech+layoffs+when:7d&hl=en-US&gl=US&ceid=US:en') },
-    { name: 'TechCrunch Layoffs', url: rss('https://techcrunch.com/tag/layoffs/feed/') },
   ],
   unicorns: [
     { name: 'Unicorn News', url: rss('https://news.google.com/rss/search?q=("unicorn+startup"+OR+"unicorn+valuation"+OR+"$1+billion+valuation")+when:7d&hl=en-US&gl=US&ceid=US:en') },

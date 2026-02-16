@@ -2535,7 +2535,6 @@ export class DeckGLMap {
           { key: 'accelerators', label: 'Accelerators', icon: '&#9889;' },
           { key: 'cloudRegions', label: 'Cloud Regions', icon: '&#9729;' },
           { key: 'datacenters', label: 'AI Data Centers', icon: '&#128421;' },
-          { key: 'cyberThreats', label: 'Cyber Threats', icon: '&#128737;' },
           { key: 'techEvents', label: 'Tech Events', icon: '&#128197;' },
         ]
       : [
@@ -2651,7 +2650,6 @@ export class DeckGLMap {
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Other</div>
-          <div class="layer-help-item"><span>CYBERTHREATS</span> Geo-located IOC infrastructure</div>
           <div class="layer-help-item"><span>TECHEVENTS</span> Upcoming conferences and product events</div>
           <div class="layer-help-item"><span>COUNTRIES</span> Country name overlays</div>
         </div>
@@ -2754,6 +2752,7 @@ export class DeckGLMap {
           { shape: shapes.circle('rgb(100, 200, 255)'), label: 'Tech HQ' },
           { shape: shapes.circle('rgb(255, 200, 0)'), label: 'Accelerator' },
           { shape: shapes.circle('rgb(150, 100, 255)'), label: 'Cloud Region' },
+          { shape: shapes.triangle('rgb(168, 85, 247)'), label: 'Tech Event' },
           { shape: shapes.square('rgb(136, 68, 255)'), label: 'Datacenter' },
         ]
       : [

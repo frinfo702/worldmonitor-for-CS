@@ -283,6 +283,31 @@ export class App {
     // Check if variant changed - reset all settings to variant defaults
     const storedVariant = localStorage.getItem("worldmonitor-variant");
     const currentVariant = SITE_VARIANT;
+    const techDisallowedLayers: (keyof MapLayers)[] = [
+      "conflicts",
+      "bases",
+      "cables",
+      "pipelines",
+      "ais",
+      "nuclear",
+      "irradiators",
+      "sanctions",
+      "weather",
+      "economic",
+      "waterways",
+      "outages",
+      "cyberThreats",
+      "protests",
+      "flights",
+      "military",
+      "natural",
+      "spaceports",
+      "minerals",
+      "fires",
+      "ucdpEvents",
+      "displacement",
+      "climate",
+    ];
     console.log(
       `[App] Variant check: stored="${storedVariant}", current="${currentVariant}"`,
     );
@@ -386,6 +411,12 @@ export class App {
       }
     }
 
+    if (currentVariant === "tech") {
+      techDisallowedLayers.forEach((layer) => {
+        this.mapLayers[layer] = false;
+      });
+    }
+
     // Desktop key management panel must always remain accessible in Tauri.
     if (this.isDesktopApp) {
       const runtimePanel = this.panelSettings["runtime-config"] ?? {
@@ -405,23 +436,8 @@ export class App {
     if (this.initialUrlState.layers) {
       // For tech variant, filter out geopolitical layers from URL
       if (currentVariant === "tech") {
-        const geoLayers: (keyof MapLayers)[] = [
-          "conflicts",
-          "bases",
-          "nuclear",
-          "irradiators",
-          "sanctions",
-          "military",
-          "protests",
-          "pipelines",
-          "waterways",
-          "ais",
-          "flights",
-          "spaceports",
-          "minerals",
-        ];
         const urlLayers = this.initialUrlState.layers;
-        geoLayers.forEach((layer) => {
+        techDisallowedLayers.forEach((layer) => {
           urlLayers[layer] = false;
         });
       }

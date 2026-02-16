@@ -339,10 +339,9 @@ export class MapComponent {
       'waterways',                                        // labels
     ];
     const techLayers: (keyof MapLayers)[] = [
-      'cables', 'datacenters', 'outages',                // tech infrastructure
-      'startupHubs', 'cloudRegions', 'accelerators', 'techHQs', 'techEvents', // tech ecosystem
-      'natural', 'weather',                               // natural events
-      'economic',                                         // economic/geographic
+      'hotspots',                                         // research/product hubs
+      'datacenters', 'startupHubs', 'cloudRegions',      // product infrastructure
+      'accelerators', 'techHQs', 'techEvents',           // tech ecosystem
     ];
     const layers = SITE_VARIANT === 'tech' ? techLayers : fullLayers;
     const layerLabels: Partial<Record<keyof MapLayers, string>> = {
@@ -388,23 +387,20 @@ export class MapComponent {
       </div>
       <div class="layer-help-content">
         <div class="layer-help-section">
-          <div class="layer-help-title">Tech Ecosystem</div>
+          <div class="layer-help-title">Research & Product</div>
+          <div class="layer-help-item"><span>HOTSPOTS</span> Trending paper/product activity hubs</div>
           <div class="layer-help-item"><span>STARTUPHUBS</span> Major startup ecosystems (SF, NYC, London, etc.)</div>
-          <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS, Azure, GCP data center regions</div>
           <div class="layer-help-item"><span>TECHHQS</span> Headquarters of major tech companies</div>
           <div class="layer-help-item"><span>ACCELERATORS</span> Y Combinator, Techstars, 500 Startups locations</div>
+          <div class="layer-help-item"><span>TECHEVENTS</span> Upcoming conferences and product events</div>
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Infrastructure</div>
-          <div class="layer-help-item"><span>CABLES</span> Major undersea fiber optic cables (internet backbone)</div>
+          <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS, Azure, GCP data center regions</div>
           <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs</div>
-          <div class="layer-help-item"><span>OUTAGES</span> Internet blackouts and service disruptions</div>
         </div>
         <div class="layer-help-section">
-          <div class="layer-help-title">Natural & Economic</div>
-          <div class="layer-help-item"><span>NATURAL</span> Earthquakes, storms, fires (may affect data centers)</div>
-          <div class="layer-help-item"><span>WEATHER</span> Severe weather alerts</div>
-          <div class="layer-help-item"><span>ECONOMIC</span> Stock exchanges & central banks</div>
+          <div class="layer-help-title">Other</div>
           <div class="layer-help-item"><span>COUNTRIES</span> Country name overlays</div>
         </div>
       </div>
@@ -502,9 +498,11 @@ export class MapComponent {
     if (SITE_VARIANT === 'tech') {
       // Tech variant legend
       legend.innerHTML = `
+        <div class="map-legend-item"><span class="legend-dot" style="background:#78b4ff"></span>RESEARCH/PRODUCT HUB</div>
         <div class="map-legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>TECH HQ</div>
         <div class="map-legend-item"><span class="legend-dot" style="background:#06b6d4"></span>STARTUP HUB</div>
         <div class="map-legend-item"><span class="legend-dot" style="background:#f59e0b"></span>CLOUD REGION</div>
+        <div class="map-legend-item"><span class="map-legend-icon" style="color:#ff6600">🎯</span>ACCELERATOR</div>
         <div class="map-legend-item"><span class="map-legend-icon" style="color:#a855f7">📅</span>TECH EVENT</div>
         <div class="map-legend-item"><span class="map-legend-icon" style="color:#4ecdc4">💾</span>DATACENTER</div>
       `;

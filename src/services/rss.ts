@@ -3,6 +3,7 @@ import { SITE_VARIANT } from '@/config';
 import { chunkArray, fetchWithProxy } from '@/utils';
 import { classifyByKeyword, classifyWithAI } from './threat-classifier';
 import { inferGeoHubsFromTitle } from './geo-hub-index';
+import { findTopAIOrgByText } from './top-ai-orgs';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
 import { ingestHeadlines } from './trending-keywords';
 
@@ -129,6 +130,19 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
         const isAlert = threat.level === 'critical' || threat.level === 'high';
         const geoMatches = inferGeoHubsFromTitle(title);
         const topGeo = geoMatches[0];
+        const topOrg = findTopAIOrgByText(`${feed.name} ${title}`);
+
+        const inferredGeo = SITE_VARIANT === 'tech'
+          ? (topOrg
+              ? { lat: topOrg.lat, lon: topOrg.lon, locationName: topOrg.name }
+              : topGeo
+                ? { lat: topGeo.hub.lat, lon: topGeo.hub.lon, locationName: topGeo.hub.name }
+                : undefined)
+          : (topGeo
+              ? { lat: topGeo.hub.lat, lon: topGeo.hub.lon, locationName: topGeo.hub.name }
+              : topOrg
+                ? { lat: topOrg.lat, lon: topOrg.lon, locationName: topOrg.name }
+                : undefined);
 
         return {
           source: feed.name,
@@ -137,7 +151,7 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
           pubDate,
           isAlert,
           threat,
-          ...(topGeo && { lat: topGeo.hub.lat, lon: topGeo.hub.lon, locationName: topGeo.hub.name }),
+          ...(inferredGeo ?? {}),
         };
       });
 

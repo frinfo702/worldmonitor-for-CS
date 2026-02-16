@@ -10,6 +10,10 @@ import { getNaturalEventIcon } from '@/services/eonet';
 import type { WeatherAlert } from '@/services/weather';
 import { getSeverityColor } from '@/services/weather';
 import {
+  TOP_AI_ORG_MARKERS,
+  getTopAIOrgLogoUrl,
+} from '@/services/top-ai-orgs';
+import {
   MAP_URLS,
   INTEL_HOTSPOTS,
   CONFLICT_ZONES,
@@ -124,6 +128,7 @@ export class MapComponent {
   private techActivities: TechHubActivity[] = [];
   private geoActivities: GeoHubActivity[] = [];
   private news: NewsItem[] = [];
+  private newsLocations: Array<{ lat: number; lon: number; title: string; threatLevel: string }> = [];
   private onTechHubClick?: (hub: TechHubActivity) => void;
   private onGeoHubClick?: (hub: GeoHubActivity) => void;
   private popup: MapPopup;
@@ -1800,6 +1805,47 @@ export class MapComponent {
 
         this.overlays.appendChild(div);
       });
+
+      // Top AI organizations (logo markers)
+      TOP_AI_ORG_MARKERS.forEach((org) => {
+        const pos = projection([org.lon, org.lat]);
+        if (!pos) return;
+
+        const div = document.createElement('div');
+        div.className = `top-org-logo-marker ${org.kind}`;
+        div.style.left = `${pos[0]}px`;
+        div.style.top = `${pos[1]}px`;
+        div.title = `${org.name} (${org.city})`;
+
+        const img = document.createElement('img');
+        img.className = 'top-org-logo-image';
+        img.src = getTopAIOrgLogoUrl(org.domain);
+        img.alt = `${org.name} logo`;
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+
+        const fallback = document.createElement('span');
+        fallback.className = 'top-org-logo-fallback';
+        fallback.textContent = org.shortLabel.slice(0, 2).toUpperCase();
+        fallback.style.display = 'none';
+
+        img.addEventListener('error', () => {
+          img.style.display = 'none';
+          fallback.style.display = 'inline-flex';
+        });
+
+        div.appendChild(img);
+        div.appendChild(fallback);
+
+        if (this.state.zoom >= 2.8) {
+          const label = document.createElement('div');
+          label.className = 'top-org-logo-label';
+          label.textContent = org.shortLabel;
+          div.appendChild(label);
+        }
+
+        this.overlays.appendChild(div);
+      });
     }
 
     // Accelerators (🎯 icons)
@@ -1970,6 +2016,22 @@ export class MapComponent {
           });
         });
 
+        this.overlays.appendChild(div);
+      });
+    }
+
+    // Feed/Paper-linked news locations
+    if (this.newsLocations.length > 0) {
+      const shown = this.newsLocations.slice(0, 120);
+      shown.forEach((newsLoc) => {
+        const pos = projection([newsLoc.lon, newsLoc.lat]);
+        if (!pos) return;
+
+        const div = document.createElement('div');
+        div.className = `news-location-marker ${newsLoc.threatLevel}`;
+        div.style.left = `${pos[0]}px`;
+        div.style.top = `${pos[1]}px`;
+        div.title = newsLoc.title;
         this.overlays.appendChild(div);
       });
     }
@@ -3256,9 +3318,9 @@ export class MapComponent {
     // SVG/mobile fallback intentionally does not render this layer to stay lightweight.
   }
 
-  public setNewsLocations(_data: Array<{ lat: number; lon: number; title: string; threatLevel: string }>): void {
-    // SVG fallback: news locations rendered as simple circles
-    // For now, skip on SVG map to keep mobile lightweight
+  public setNewsLocations(data: Array<{ lat: number; lon: number; title: string; threatLevel: string }>): void {
+    this.newsLocations = data;
+    this.render();
   }
 
   public setTechActivity(activities: TechHubActivity[]): void {

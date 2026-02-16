@@ -10,6 +10,15 @@ import { clusterNewsCore } from './analysis-core';
 import { mlWorker } from './ml-worker';
 import { ML_THRESHOLDS } from '@/config/ml-config';
 
+type ThreatLevel = 'critical' | 'high' | 'medium' | 'low' | 'info';
+const THREAT_PRIORITY: Record<ThreatLevel, number> = {
+  critical: 5,
+  high: 4,
+  medium: 3,
+  low: 2,
+  info: 1,
+};
+
 export function clusterNews(items: NewsItem[]): ClusteredEvent[] {
   return clusterNewsCore(items, getSourceTier) as ClusteredEvent[];
 }
@@ -116,6 +125,8 @@ function mergeSemanticallySimilarClusters(
     const allDates = allItems.map(i => i.pubDate.getTime());
     const firstSeen = new Date(Math.min(...allDates));
     const lastUpdated = new Date(Math.max(...allDates));
+    const mergedThreat = selectMergedThreat(primary, others);
+    const mergedGeo = selectMergedGeo(primary, others, allItems);
 
     const mergedCluster: ClusteredEvent = {
       id: primary.id,
@@ -130,6 +141,8 @@ function mergeSemanticallySimilarClusters(
       isAlert: allItems.some(i => i.isAlert),
       monitorColor: primary.monitorColor,
       velocity: primary.velocity,
+      threat: mergedThreat,
+      ...(mergedGeo ?? {}),
     };
     merged.push(mergedCluster);
   }
@@ -145,4 +158,44 @@ function mergeSemanticallySimilarClusters(
   merged.sort((a, b) => b.lastUpdated.getTime() - a.lastUpdated.getTime());
 
   return merged;
+}
+
+function selectMergedThreat(
+  primary: ClusteredEvent,
+  others: ClusteredEvent[]
+): ClusteredEvent['threat'] {
+  const candidates = [primary, ...others]
+    .map(cluster => cluster.threat)
+    .filter((threat): threat is NonNullable<ClusteredEvent['threat']> => !!threat);
+
+  if (candidates.length > 0) {
+    return candidates.sort(
+      (a, b) => (THREAT_PRIORITY[b.level as ThreatLevel] || 1) - (THREAT_PRIORITY[a.level as ThreatLevel] || 1)
+    )[0];
+  }
+
+  return undefined;
+}
+
+function selectMergedGeo(
+  primary: ClusteredEvent,
+  others: ClusteredEvent[],
+  items: NewsItem[]
+): { lat: number; lon: number } | null {
+  if (primary.lat != null && primary.lon != null) {
+    return { lat: primary.lat, lon: primary.lon };
+  }
+
+  for (const cluster of others) {
+    if (cluster.lat != null && cluster.lon != null) {
+      return { lat: cluster.lat, lon: cluster.lon };
+    }
+  }
+
+  const withGeo = items.find(item => item.lat != null && item.lon != null);
+  if (withGeo && withGeo.lat != null && withGeo.lon != null) {
+    return { lat: withGeo.lat, lon: withGeo.lon };
+  }
+
+  return null;
 }

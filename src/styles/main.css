@@ -543,6 +543,47 @@ body.animations-paused *::after {
   gap: 8px;
 }
 
+.panel-brand-logos {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel-brand-logo-wrap {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+
+.panel-brand-logo {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  object-fit: cover;
+  display: block;
+}
+
+.panel-brand-logo-fallback {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.panel-brand-logo-fallback.visible {
+  display: inline-flex;
+}
+
 .panel-title {
   font-size: 11px;
   font-weight: 600;
@@ -5054,6 +5095,64 @@ a.prediction-link:hover {
 .tech-hq-marker.cluster .tech-hq-icon {
   font-size: 18px;
 }
+
+.top-org-logo-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 62;
+  pointer-events: none;
+}
+
+.top-org-logo-image,
+.top-org-logo-fallback {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(15, 18, 25, 0.8);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+}
+
+.top-org-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #d5d9e6;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.top-org-logo-label {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 8px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.72);
+  color: #e3e8f5;
+}
+
+.news-location-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 58;
+}
+
+.news-location-marker.critical { background: rgba(239, 68, 68, 0.95); }
+.news-location-marker.high { background: rgba(249, 115, 22, 0.9); }
+.news-location-marker.medium { background: rgba(234, 179, 8, 0.88); }
+.news-location-marker.low { background: rgba(34, 197, 94, 0.85); }
+.news-location-marker.info { background: rgba(59, 130, 246, 0.78); }
 
 .tech-event-marker.cluster {
   width: 18px;

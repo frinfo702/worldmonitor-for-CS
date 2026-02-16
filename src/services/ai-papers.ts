@@ -1,6 +1,7 @@
 import { API_URLS } from '@/config';
 import type { NewsItem } from '@/types';
 import { createCircuitBreaker } from '@/utils';
+import { findTopAIOrgByText } from './top-ai-orgs';
 
 export interface AIPaper {
   id: string;
@@ -84,6 +85,14 @@ function buildMetadata(paper: AIPaper): string {
 export function mapAIPapersToNewsItems(papers: AIPaper[]): NewsItem[] {
   return papers.map((paper) => {
     const publishedDate = new Date(paper.publishedAt);
+    const inferredOrg = findTopAIOrgByText(
+      [paper.institution, paper.institutionCountry, paper.title, paper.venue]
+        .filter(Boolean)
+        .join(' ')
+    );
+    const lat = paper.lat ?? inferredOrg?.lat ?? undefined;
+    const lon = paper.lon ?? inferredOrg?.lon ?? undefined;
+
     return {
       source: paper.venue,
       title: paper.title,
@@ -94,9 +103,10 @@ export function mapAIPapersToNewsItems(papers: AIPaper[]): NewsItem[] {
       metadata: buildMetadata(paper),
       trustScore: paper.trustScore,
       accepted: paper.sourceType === 'accepted',
-      lat: paper.lat ?? undefined,
-      lon: paper.lon ?? undefined,
-      locationName: paper.institution || paper.institutionCountry || undefined,
+      lat,
+      lon,
+      locationName:
+        paper.institution || inferredOrg?.name || paper.institutionCountry || undefined,
     };
   });
 }

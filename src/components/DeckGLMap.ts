@@ -41,6 +41,11 @@ import type {
 import { ArcLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import type { WeatherAlert } from '@/services/weather';
+import {
+  TOP_AI_ORG_MARKERS,
+  getTopAIOrgLogoUrl,
+  type TopAIOrgMarker,
+} from '@/services/top-ai-orgs';
 import { escapeHtml } from '@/utils/sanitize';
 import { debounce, rafSchedule } from '@/utils/index';
 import {
@@ -993,6 +998,7 @@ export class DeckGLMap {
       }
       if (mapLayers.techHQs) {
         layers.push(...this.createTechHQClusterLayers());
+        layers.push(...this.createTopAIOrgLogoLayers());
       }
       if (mapLayers.accelerators) {
         layers.push(this.createAcceleratorsLayer());
@@ -1785,6 +1791,56 @@ export class DeckGLMap {
     return layers;
   }
 
+  private createTopAIOrgLogoLayers(): Layer[] {
+    const layers: Layer[] = [];
+    const zoom = this.maplibreMap?.getZoom() || 2;
+
+    layers.push(
+      new IconLayer<TopAIOrgMarker>({
+        id: 'top-org-logos-layer',
+        data: TOP_AI_ORG_MARKERS,
+        getPosition: (d) => [d.lon, d.lat],
+        getIcon: (d) =>
+          ({
+            id: d.id,
+            url: getTopAIOrgLogoUrl(d.domain),
+            width: 64,
+            height: 64,
+            anchorY: 64,
+          }) as any,
+        getSize: (d) => (d.kind === 'company' ? 24 : 20),
+        sizeMinPixels: 12,
+        sizeMaxPixels: 34,
+        pickable: true,
+        billboard: true,
+      })
+    );
+
+    if (zoom >= 3) {
+      layers.push(
+        new TextLayer<TopAIOrgMarker>({
+          id: 'top-org-labels-layer',
+          data: TOP_AI_ORG_MARKERS,
+          getText: (d) => d.shortLabel,
+          getPosition: (d) => [d.lon, d.lat],
+          getSize: 10,
+          getColor: [235, 235, 235, 220],
+          getPixelOffset: [0, 14],
+          getTextAnchor: 'middle',
+          getAlignmentBaseline: 'top',
+          fontFamily: 'system-ui, sans-serif',
+          fontWeight: 600,
+          background: true,
+          getBackgroundColor: [0, 0, 0, 140],
+          backgroundPadding: [3, 2, 3, 2],
+          pickable: false,
+        })
+      );
+    }
+
+    return layers;
+  }
+
   private createTechEventClusterLayers(): Layer[] {
     this.updateClusterData();
     const layers: Layer[] = [];
@@ -2239,6 +2295,8 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>Cyber Threat</strong><br/>${text(obj.severity || 'medium')} · ${text(obj.country || 'Unknown')}</div>` };
       case 'news-locations-layer':
         return { html: `<div class="deckgl-tooltip"><strong>📰 News</strong><br/>${text(obj.title?.slice(0, 80) || '')}</div>` };
+      case 'top-org-logos-layer':
+        return { html: `<div class="deckgl-tooltip"><strong>🏛️ ${text(obj.name || 'Top AI Org')}</strong><br/>${text(obj.city || '')}</div>` };
       default:
         return null;
     }

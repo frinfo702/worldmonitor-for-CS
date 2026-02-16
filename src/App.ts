@@ -67,6 +67,7 @@ import {
 } from "@/services";
 import type { AIPaperFeed } from "@/services/ai-papers";
 import { fetchCountryMarkets } from "@/services/polymarket";
+import { findTopAIOrgByText } from "@/services/top-ai-orgs";
 import { mlWorker } from "@/services/ml-worker";
 import { clusterNewsHybrid } from "@/services/clustering";
 import {
@@ -266,6 +267,16 @@ export class App {
   private pendingDeepLinkCountry: string | null = null;
   private briefRequestToken = 0;
   private readonly isDesktopApp = isDesktopRuntime();
+  private readonly brandLogoDomains = {
+    openai: "openai.com",
+    anthropic: "anthropic.com",
+    google: "deepmind.google",
+    meta: "ai.meta.com",
+    nvidia: "nvidia.com",
+    stanford: "stanford.edu",
+    mit: "mit.edu",
+    berkeley: "berkeley.edu",
+  } as const;
 
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
@@ -2228,6 +2239,62 @@ export class App {
     this.newsPanels["ai"] = aiPanel;
     this.panels["ai"] = aiPanel;
 
+    const openaiPanel = new NewsPanel("brand-openai", "OpenAI Updates");
+    this.decoratePanelWithBrandLogos(openaiPanel, [
+      { name: "OpenAI", domain: this.brandLogoDomains.openai },
+    ]);
+    this.attachRelatedAssetHandlers(openaiPanel);
+    this.newsPanels["brand-openai"] = openaiPanel;
+    this.panels["brand-openai"] = openaiPanel;
+
+    const anthropicPanel = new NewsPanel(
+      "brand-anthropic",
+      "Anthropic Updates",
+    );
+    this.decoratePanelWithBrandLogos(anthropicPanel, [
+      { name: "Anthropic", domain: this.brandLogoDomains.anthropic },
+    ]);
+    this.attachRelatedAssetHandlers(anthropicPanel);
+    this.newsPanels["brand-anthropic"] = anthropicPanel;
+    this.panels["brand-anthropic"] = anthropicPanel;
+
+    const googlePanel = new NewsPanel("brand-google", "Google AI Updates");
+    this.decoratePanelWithBrandLogos(googlePanel, [
+      { name: "Google", domain: this.brandLogoDomains.google },
+    ]);
+    this.attachRelatedAssetHandlers(googlePanel);
+    this.newsPanels["brand-google"] = googlePanel;
+    this.panels["brand-google"] = googlePanel;
+
+    const metaPanel = new NewsPanel("brand-meta", "Meta AI Updates");
+    this.decoratePanelWithBrandLogos(metaPanel, [
+      { name: "Meta", domain: this.brandLogoDomains.meta },
+    ]);
+    this.attachRelatedAssetHandlers(metaPanel);
+    this.newsPanels["brand-meta"] = metaPanel;
+    this.panels["brand-meta"] = metaPanel;
+
+    const nvidiaPanel = new NewsPanel("brand-nvidia", "NVIDIA Updates");
+    this.decoratePanelWithBrandLogos(nvidiaPanel, [
+      { name: "NVIDIA", domain: this.brandLogoDomains.nvidia },
+    ]);
+    this.attachRelatedAssetHandlers(nvidiaPanel);
+    this.newsPanels["brand-nvidia"] = nvidiaPanel;
+    this.panels["brand-nvidia"] = nvidiaPanel;
+
+    const universitiesPanel = new NewsPanel(
+      "brand-universities",
+      "Top University AI Updates",
+    );
+    this.decoratePanelWithBrandLogos(universitiesPanel, [
+      { name: "Stanford", domain: this.brandLogoDomains.stanford },
+      { name: "MIT", domain: this.brandLogoDomains.mit },
+      { name: "Berkeley", domain: this.brandLogoDomains.berkeley },
+    ]);
+    this.attachRelatedAssetHandlers(universitiesPanel);
+    this.newsPanels["brand-universities"] = universitiesPanel;
+    this.panels["brand-universities"] = universitiesPanel;
+
     const aiPapersPanel = new NewsPanel("ai-papers", "AI Papers (Trusted)", {
       clusteredMode: false,
       showSummarizeButton: false,
@@ -2565,6 +2632,144 @@ export class App {
       .map((el) => (el as HTMLElement).dataset.panel)
       .filter((key): key is string => !!key);
     localStorage.setItem(this.PANEL_ORDER_KEY, JSON.stringify(order));
+  }
+
+  private buildGeoLocatedNews(
+    clusters: ClusteredEvent[],
+    items: NewsItem[],
+  ): Array<{ lat: number; lon: number; title: string; threatLevel: string }> {
+    const points = new Map<
+      string,
+      { lat: number; lon: number; title: string; threatLevel: string; weight: number }
+    >();
+
+    const normalizeThreat = (level: string | undefined): string => {
+      if (!level) return "info";
+      if (
+        level === "critical" ||
+        level === "high" ||
+        level === "medium" ||
+        level === "low" ||
+        level === "info"
+      ) {
+        return level;
+      }
+      return "info";
+    };
+
+    const addPoint = (
+      title: string,
+      lat: number | undefined,
+      lon: number | undefined,
+      threatLevel: string,
+      weight: number,
+    ): void => {
+      if (lat == null || lon == null) return;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const key = `${title.toLowerCase()}|${lat.toFixed(3)}|${lon.toFixed(3)}`;
+      const existing = points.get(key);
+      if (!existing || weight >= existing.weight) {
+        points.set(key, {
+          lat,
+          lon,
+          title,
+          threatLevel: normalizeThreat(threatLevel),
+          weight,
+        });
+      }
+    };
+
+    for (const cluster of clusters) {
+      addPoint(
+        cluster.primaryTitle,
+        cluster.lat,
+        cluster.lon,
+        cluster.threat?.level ?? "info",
+        3,
+      );
+    }
+
+    for (const item of items) {
+      let lat = item.lat;
+      let lon = item.lon;
+      if (lat == null || lon == null) {
+        const inferred = findTopAIOrgByText(`${item.source} ${item.title}`);
+        if (inferred) {
+          lat = inferred.lat;
+          lon = inferred.lon;
+        }
+      }
+      addPoint(
+        item.title,
+        lat,
+        lon,
+        item.threat?.level ?? (item.isAlert ? "high" : "info"),
+        2,
+      );
+    }
+
+    return [...points.values()]
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 200)
+      .map(({ lat, lon, title, threatLevel }) => ({
+        lat,
+        lon,
+        title,
+        threatLevel,
+      }));
+  }
+
+  private decoratePanelWithBrandLogos(
+    panel: Panel,
+    logos: Array<{ name: string; domain: string }>,
+  ): void {
+    const headerLeft = panel.getElement().querySelector(".panel-header-left");
+    if (!headerLeft) return;
+
+    const existing = headerLeft.querySelector(".panel-brand-logos");
+    if (existing) existing.remove();
+
+    const logoStrip = document.createElement("span");
+    logoStrip.className = "panel-brand-logos";
+
+    logos.forEach(({ name, domain }) => {
+      const wrap = document.createElement("span");
+      wrap.className = "panel-brand-logo-wrap";
+
+      const img = document.createElement("img");
+      img.className = "panel-brand-logo";
+      img.src = `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(domain)}`;
+      img.alt = `${name} logo`;
+      img.width = 14;
+      img.height = 14;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+
+      const fallback = document.createElement("span");
+      fallback.className = "panel-brand-logo-fallback";
+      fallback.textContent = this.getLogoFallbackInitials(name);
+      fallback.title = name;
+
+      img.addEventListener("error", () => {
+        img.style.display = "none";
+        fallback.classList.add("visible");
+      });
+
+      wrap.appendChild(img);
+      wrap.appendChild(fallback);
+      logoStrip.appendChild(wrap);
+    });
+
+    headerLeft.insertBefore(logoStrip, headerLeft.firstChild);
+  }
+
+  private getLogoFallbackInitials(name: string): string {
+    const initials = name
+      .split(/\s+/)
+      .map((part) => part[0] ?? "")
+      .join("")
+      .toUpperCase();
+    return (initials || name.slice(0, 2)).slice(0, 3);
   }
 
   private attachRelatedAssetHandlers(panel: NewsPanel): void {
@@ -3530,6 +3735,12 @@ export class App {
       { key: "energy", feeds: FEEDS.energy },
       { key: "layoffs", feeds: FEEDS.layoffs },
       { key: "ai", feeds: FEEDS.ai },
+      { key: "brand-openai", feeds: FEEDS["brand-openai"] },
+      { key: "brand-anthropic", feeds: FEEDS["brand-anthropic"] },
+      { key: "brand-google", feeds: FEEDS["brand-google"] },
+      { key: "brand-meta", feeds: FEEDS["brand-meta"] },
+      { key: "brand-nvidia", feeds: FEEDS["brand-nvidia"] },
+      { key: "brand-universities", feeds: FEEDS["brand-universities"] },
       { key: "research-labs", feeds: FEEDS["research-labs"] },
       {
         key: "research-universities",
@@ -3659,23 +3870,15 @@ export class App {
         insightsPanel?.updateInsights(this.latestClusters);
       }
 
-      // Push geo-located news clusters to map
-      const geoLocated = this.latestClusters
-        .filter(
-          (c): c is typeof c & { lat: number; lon: number } =>
-            c.lat != null && c.lon != null,
-        )
-        .map((c) => ({
-          lat: c.lat,
-          lon: c.lon,
-          title: c.primaryTitle,
-          threatLevel: c.threat?.level ?? "info",
-        }));
-      if (geoLocated.length > 0) {
-        this.map?.setNewsLocations(geoLocated);
-      }
+      const geoLocated = this.buildGeoLocatedNews(
+        this.latestClusters,
+        this.allNews,
+      );
+      this.map?.setNewsLocations(geoLocated);
     } catch (error) {
       console.error("[App] Clustering failed, clusters unchanged:", error);
+      const fallbackGeoLocated = this.buildGeoLocatedNews([], this.allNews);
+      this.map?.setNewsLocations(fallbackGeoLocated);
     }
   }
 

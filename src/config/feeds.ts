@@ -492,6 +492,39 @@ const TECH_FEEDS: Record<string, Feed[]> = {
     { name: 'Anthropic News', url: rss('https://news.google.com/rss/search?q=Anthropic+Claude+AI+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'OpenAI News', url: rss('https://news.google.com/rss/search?q=OpenAI+ChatGPT+GPT-4+when:7d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  'brand-openai': [
+    { name: 'OpenAI Official', url: rss('https://news.google.com/rss/search?q=(site:openai.com+OR+OpenAI)+research+OR+announcement+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'ChatGPT Updates', url: rss('https://news.google.com/rss/search?q=(ChatGPT+OR+GPT-4.1+OR+GPT-5)+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'OpenAI Safety', url: rss('https://news.google.com/rss/search?q=(OpenAI+safety+OR+OpenAI+policy+OR+OpenAI+alignment)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'brand-anthropic': [
+    { name: 'Anthropic Official', url: rss('https://news.google.com/rss/search?q=(site:anthropic.com+OR+Anthropic)+research+OR+announcement+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Claude Updates', url: rss('https://news.google.com/rss/search?q=(Claude+3+OR+Claude+AI+OR+Anthropic+Claude)+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Anthropic Safety', url: rss('https://news.google.com/rss/search?q=(Anthropic+safety+OR+Anthropic+policy+OR+Anthropic+alignment)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'brand-google': [
+    { name: 'Google DeepMind Official', url: rss('https://news.google.com/rss/search?q=(site:deepmind.google+OR+"Google+DeepMind")+research+OR+announcement+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Google AI Blog', url: rss('https://news.google.com/rss/search?q=(site:blog.google+AI+OR+"Google+AI")+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Gemini Updates', url: rss('https://news.google.com/rss/search?q=(Google+Gemini+OR+Gemini+model)+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'brand-meta': [
+    { name: 'Meta AI Official', url: rss('https://news.google.com/rss/search?q=(site:ai.meta.com+OR+"Meta+AI")+research+OR+announcement+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Llama Updates', url: rss('https://news.google.com/rss/search?q=(Meta+Llama+OR+Llama+model)+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'FAIR Updates', url: rss('https://news.google.com/rss/search?q=("FAIR"+Meta+OR+"Facebook+AI+Research")+paper+OR+research+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'brand-nvidia': [
+    { name: 'NVIDIA Official', url: rss('https://news.google.com/rss/search?q=(site:nvidia.com+OR+NVIDIA)+AI+OR+announcement+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'NVIDIA Research', url: rss('https://news.google.com/rss/search?q=(site:research.nvidia.com+OR+"NVIDIA+Research")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'NVIDIA Chips & AI', url: rss('https://news.google.com/rss/search?q=(NVIDIA+GPU+OR+NVIDIA+Blackwell+OR+NVIDIA+AI+chip)+release+OR+update+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  'brand-universities': [
+    { name: 'Stanford HAI Updates', url: rss('https://news.google.com/rss/search?q=(site:hai.stanford.edu+OR+"Stanford+HAI")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'MIT CSAIL Updates', url: rss('https://news.google.com/rss/search?q=(site:csail.mit.edu+OR+"MIT+CSAIL")+AI+OR+research+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Berkeley BAIR Updates', url: rss('https://news.google.com/rss/search?q=(site:bair.berkeley.edu+OR+"Berkeley+AI+Research")+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'CMU ML Updates', url: rss('https://news.google.com/rss/search?q=("Carnegie+Mellon"+machine+learning+OR+site:cs.cmu.edu)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Oxford AI Updates', url: rss('https://news.google.com/rss/search?q=(Oxford+AI+research+OR+site:ox.ac.uk+artificial+intelligence)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'ETH Zurich AI Updates', url: rss('https://news.google.com/rss/search?q=(ETH+Zurich+AI+research+OR+site:ethz.ch+machine+learning)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+  ],
   'research-labs': [
     { name: 'OpenAI Research', url: rss('https://news.google.com/rss/search?q=(site:openai.com/research+OR+"OpenAI+research")+when:14d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Anthropic Research', url: rss('https://news.google.com/rss/search?q=(site:anthropic.com/research+OR+"Anthropic+research")+when:14d&hl=en-US&gl=US&ceid=US:en') },

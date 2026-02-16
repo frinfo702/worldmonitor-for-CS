@@ -9,7 +9,7 @@ export interface AIPaper {
   summary: string;
   authors: string[];
   venue: string;
-  source: 'openreview' | 'arxiv';
+  source: 'openreview' | 'arxiv' | 'alphaxiv';
   sourceType: 'accepted' | 'preprint';
   trustScore: number;
   acceptedLabel: string;

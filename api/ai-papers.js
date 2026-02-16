@@ -5,15 +5,22 @@ export const config = { runtime: 'edge' };
 
 const OPENREVIEW_BASE = 'https://api2.openreview.net';
 const ARXIV_BASE = 'https://export.arxiv.org/api/query';
+const ALPHAXIV_BASE = 'https://api.alphaxiv.org';
 
 const CACHE_TTL_SECONDS = 20 * 60; // 20 minutes
 const SUMMARY_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 const DEFAULT_LIMIT = 36;
 const MAX_LIMIT = 80;
 
 const ARXIV_CATEGORIES = ['cs.AI', 'cs.LG', 'cs.CL', 'cs.CV'];
+const ALPHAXIV_FEED_VARIANTS = [
+  { sort: 'Hot', source: null, trustBase: 62, venue: 'alphaXiv Hot' },
+  { sort: 'Likes', source: null, trustBase: 60, venue: 'alphaXiv Likes' },
+  { sort: 'Hot', source: 'GitHub', trustBase: 64, venue: 'alphaXiv GitHub' },
+  { sort: 'Hot', source: 'Twitter (X)', trustBase: 61, venue: 'alphaXiv X' },
+];
 
 const TRUSTED_TRACKS = [
   { venue: 'NeurIPS', venuePrefix: 'NeurIPS.cc', trust: 100 },
@@ -116,6 +123,128 @@ function parseLimit(raw) {
   const parsed = Number.parseInt(raw || '', 10);
   if (!Number.isFinite(parsed)) return DEFAULT_LIMIT;
   return Math.max(10, Math.min(MAX_LIMIT, parsed));
+}
+
+function parseNumeric(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toAlphaXivTrustScore(baseTrust, paper) {
+  const likes = parseNumeric(paper?.metrics?.public_total_votes) + parseNumeric(paper?.metrics?.total_votes);
+  const stars = parseNumeric(paper?.github_stars);
+  const bonus = Math.min(8, Math.log10(1 + likes + stars) * 3);
+  return Math.max(50, Math.min(72, Math.round(baseTrust + bonus)));
+}
+
+function parseArxivIdentifier(value) {
+  if (!value) return null;
+  const normalized = normalizeWhitespace(String(value));
+  const match = normalized.match(/\d{4}\.\d{4,5}(?:v\d+)?/);
+  return match ? match[0] : null;
+}
+
+function toArxivPdfLink(universalPaperId, canonicalId) {
+  const raw = parseArxivIdentifier(universalPaperId) || parseArxivIdentifier(canonicalId);
+  if (!raw) return null;
+  const withoutVersion = raw.replace(/v\d+$/, '');
+  return `https://arxiv.org/pdf/${withoutVersion}.pdf`;
+}
+
+function parseAlphaXivPapers(payload, variant) {
+  const papers = [];
+  const entries = Array.isArray(payload?.papers) ? payload.papers : [];
+
+  for (const entry of entries) {
+    const title = normalizeWhitespace(entry?.title || '');
+    const abstract = normalizeWhitespace(entry?.abstract || '');
+    if (!title || !abstract) continue;
+
+    const universalPaperId = normalizeWhitespace(entry?.universal_paper_id || '');
+    const canonicalId = normalizeWhitespace(entry?.canonical_id || '');
+    const firstOrg = Array.isArray(entry?.organization_info) ? entry.organization_info[0] : null;
+    const firstOrgName = normalizeWhitespace(firstOrg?.name || '');
+    const authors = Array.isArray(entry?.full_authors)
+      ? entry.full_authors.map((author) => normalizeWhitespace(author?.full_name || '')).filter(Boolean)
+      : [];
+    const fallbackAuthors = Array.isArray(entry?.authors)
+      ? entry.authors.map((author) => normalizeWhitespace(author || '')).filter(Boolean)
+      : [];
+    const summary = normalizeWhitespace(entry?.paper_summary?.summary || '');
+    const linkId = universalPaperId || canonicalId || normalizeWhitespace(entry?.id || '');
+    if (!linkId) continue;
+
+    papers.push({
+      id: `alphaxiv:${linkId}`,
+      title,
+      abstract,
+      tldr: summary,
+      authors: authors.length > 0 ? authors : fallbackAuthors,
+      authorIds: [],
+      firstAuthorId: null,
+      venue: variant.venue,
+      acceptedLabel: 'trending',
+      source: 'alphaxiv',
+      sourceType: 'preprint',
+      trustScore: toAlphaXivTrustScore(variant.trustBase, entry),
+      publishedAt: toIsoDate(entry?.publication_date || entry?.first_publication_date || entry?.updated_at),
+      link: `https://www.alphaxiv.org/abs/${encodeURIComponent(linkId)}`,
+      pdfLink: toArxivPdfLink(universalPaperId, canonicalId),
+      citations: parseNumeric(entry?.metrics?.public_total_votes) || null,
+      institution: firstOrgName || null,
+      institutionCountry: null,
+      lat: null,
+      lon: null,
+    });
+  }
+
+  return papers;
+}
+
+async function fetchAlphaXivVariant(variant, pageSize) {
+  const url = new URL(`${ALPHAXIV_BASE}/papers/v3/feed`);
+  url.searchParams.set('pageNum', '0');
+  url.searchParams.set('pageSize', String(pageSize));
+  url.searchParams.set('sort', variant.sort);
+  url.searchParams.set('interval', '90 Days');
+  if (variant.source) url.searchParams.set('source', variant.source);
+
+  try {
+    const payload = await fetchJson(url.toString(), 15000);
+    return parseAlphaXivPapers(payload, variant);
+  } catch (error) {
+    const suffix = variant.source ? ` (${variant.source})` : '';
+    console.warn(`[ai-papers] alphaXiv fetch failed for ${variant.sort}${suffix}:`, error?.message || error);
+    return [];
+  }
+}
+
+async function fetchAlphaXivPapers(limitTotal) {
+  const pageSize = Math.max(6, Math.ceil(limitTotal / ALPHAXIV_FEED_VARIANTS.length));
+  const settled = await Promise.allSettled(
+    ALPHAXIV_FEED_VARIANTS.map((variant) => fetchAlphaXivVariant(variant, pageSize))
+  );
+
+  const papers = [];
+  for (const result of settled) {
+    if (result.status === 'fulfilled') papers.push(...result.value);
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const paper of papers) {
+    const key = normalizeTitle(paper.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(paper);
+  }
+
+  deduped.sort((a, b) => {
+    if (b.trustScore !== a.trustScore) return b.trustScore - a.trustScore;
+    return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+  });
+
+  return deduped.slice(0, limitTotal);
 }
 
 function buildVenueIds(venuePrefix) {
@@ -493,18 +622,86 @@ function mergeDeduplicatePapers(primaryPapers, secondaryPapers) {
   return merged;
 }
 
+function deduplicateByTitle(papers) {
+  const deduped = [];
+  const seen = new Set();
+  for (const paper of papers) {
+    const key = normalizeTitle(paper.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(paper);
+  }
+  return deduped;
+}
+
+function selectBalancedPapers({ trustedPapers, alphaXivPapers, arxivPapers, limit }) {
+  const trusted = deduplicateByTitle(trustedPapers);
+  const alpha = deduplicateByTitle(alphaXivPapers);
+  const arxiv = deduplicateByTitle(arxivPapers);
+
+  const minAlpha = Math.min(alpha.length, Math.max(4, Math.floor(limit * 0.2)));
+  const minArxiv = Math.min(arxiv.length, Math.max(4, Math.floor(limit * 0.15)));
+  const maxTrusted = Math.min(trusted.length, Math.max(0, limit - minAlpha - minArxiv));
+
+  const selected = [];
+  const seen = new Set();
+  const pushIfUnique = (paper) => {
+    const key = normalizeTitle(paper.title);
+    if (!key || seen.has(key) || selected.length >= limit) return false;
+    seen.add(key);
+    selected.push(paper);
+    return true;
+  };
+
+  let addedTrusted = 0;
+  for (const paper of trusted) {
+    if (addedTrusted >= maxTrusted || selected.length >= limit) break;
+    if (pushIfUnique(paper)) addedTrusted += 1;
+  }
+
+  let addedAlpha = 0;
+  for (const paper of alpha) {
+    if (addedAlpha >= minAlpha || selected.length >= limit) break;
+    if (pushIfUnique(paper)) addedAlpha += 1;
+  }
+
+  let addedArxiv = 0;
+  for (const paper of arxiv) {
+    if (addedArxiv >= minArxiv || selected.length >= limit) break;
+    if (pushIfUnique(paper)) addedArxiv += 1;
+  }
+
+  if (selected.length < limit) {
+    const fallback = mergeDeduplicatePapers(trusted, [...alpha, ...arxiv]);
+    for (const paper of fallback) {
+      if (selected.length >= limit) break;
+      pushIfUnique(paper);
+    }
+  }
+
+  return selected.slice(0, limit);
+}
+
 function attachInstitutionAndGeo(papers, profileMap) {
   return papers.map((paper) => {
     const institution = paper.firstAuthorId ? profileMap.get(paper.firstAuthorId) : null;
-    if (!institution) return { ...paper, institution: null, institutionCountry: null, lat: null, lon: null };
+    if (!institution) {
+      return {
+        ...paper,
+        institution: paper.institution ?? null,
+        institutionCountry: paper.institutionCountry ?? null,
+        lat: paper.lat ?? null,
+        lon: paper.lon ?? null,
+      };
+    }
 
     const centroid = COUNTRY_CENTROIDS[institution.country] || null;
     return {
       ...paper,
-      institution: institution.name || null,
-      institutionCountry: institution.country || null,
-      lat: centroid?.lat ?? null,
-      lon: centroid?.lon ?? null,
+      institution: institution.name || paper.institution || null,
+      institutionCountry: institution.country || paper.institutionCountry || null,
+      lat: centroid?.lat ?? paper.lat ?? null,
+      lon: centroid?.lon ?? paper.lon ?? null,
     };
   });
 }
@@ -594,13 +791,18 @@ export default async function handler(request) {
       });
     }
 
-    const [trustedPapers, arxivPapers] = await Promise.all([
+    const [trustedPapers, arxivPapers, alphaXivPapers] = await Promise.all([
       fetchOpenReviewPapers(limit),
       fetchArxivPapers(Math.ceil(limit * 0.8)),
+      fetchAlphaXivPapers(Math.ceil(limit * 1.2)),
     ]);
 
-    const merged = mergeDeduplicatePapers(trustedPapers, arxivPapers);
-    const capped = merged.slice(0, limit);
+    const capped = selectBalancedPapers({
+      trustedPapers,
+      alphaXivPapers,
+      arxivPapers,
+      limit,
+    });
 
     const firstAuthorIds = Array.from(new Set(capped.map((p) => p.firstAuthorId).filter(Boolean)));
     const profileMap = await fetchProfilesByIds(firstAuthorIds);

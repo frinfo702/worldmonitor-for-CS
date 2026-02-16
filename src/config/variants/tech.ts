@@ -176,6 +176,7 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'live-news': { name: 'Tech Headlines', enabled: true, priority: 1 },
   events: { name: 'Tech Events', enabled: true, priority: 1 },
   ai: { name: 'AI/ML News', enabled: true, priority: 1 },
+  'ai-papers': { name: 'AI Papers (Trusted)', enabled: true, priority: 1 },
   tech: { name: 'Technology', enabled: true, priority: 1 },
   startups: { name: 'Startups & VC', enabled: true, priority: 1 },
   vcblogs: { name: 'VC Insights & Essays', enabled: true, priority: 1 },

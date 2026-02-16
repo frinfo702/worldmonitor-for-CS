@@ -6,6 +6,7 @@
 import type { NewsItem, ClusteredEvent, PredictionMarket, MarketData } from '@/types';
 import type { CorrelationSignal } from './correlation';
 import { SOURCE_TIERS, SOURCE_TYPES, type SourceType } from '@/config/feeds';
+import { clusterNewsCore, analyzeCorrelationsCore, type StreamSnapshot } from './analysis-core';
 
 // Import worker using Vite's worker syntax
 import AnalysisWorker from '@/workers/analysis.worker?worker';
@@ -35,6 +36,9 @@ class AnalysisWorkerManager {
   private pendingRequests: Map<string, PendingRequest<unknown>> = new Map();
   private requestIdCounter = 0;
   private isReady = false;
+  private workerUnavailableError: Error | null = null;
+  private fallbackSnapshot: StreamSnapshot | null = null;
+  private recentSignalKeys = new Set<string>();
   private readyPromise: Promise<void> | null = null;
   private readyResolve: (() => void) | null = null;
   private readyReject: ((error: Error) => void) | null = null;
@@ -46,7 +50,7 @@ class AnalysisWorkerManager {
    * Initialize the worker. Called lazily on first use.
    */
   private initWorker(): void {
-    if (this.worker) return;
+    if (this.worker || this.workerUnavailableError) return;
 
     this.readyPromise = new Promise((resolve, reject) => {
       this.readyResolve = resolve;
@@ -58,6 +62,7 @@ class AnalysisWorkerManager {
       if (!this.isReady) {
         const error = new Error('Worker failed to become ready within timeout');
         console.error('[AnalysisWorker]', error.message);
+        this.workerUnavailableError = error;
         this.readyReject?.(error);
         this.cleanup();
       }
@@ -67,7 +72,9 @@ class AnalysisWorkerManager {
       this.worker = new AnalysisWorker();
     } catch (error) {
       console.error('[AnalysisWorker] Failed to create worker:', error);
-      this.readyReject?.(error instanceof Error ? error : new Error(String(error)));
+      const workerError = error instanceof Error ? error : new Error(String(error));
+      this.workerUnavailableError = workerError;
+      this.readyReject?.(workerError);
       this.cleanup();
       return;
     }
@@ -120,7 +127,9 @@ class AnalysisWorkerManager {
 
       // If not ready yet, reject the ready promise
       if (!this.isReady) {
-        this.readyReject?.(new Error(`Worker failed to initialize: ${error.message}`));
+        const workerError = new Error(`Worker failed to initialize: ${error.message}`);
+        this.workerUnavailableError = workerError;
+        this.readyReject?.(workerError);
         this.cleanup();
         return;
       }
@@ -152,10 +161,47 @@ class AnalysisWorkerManager {
     this.readyReject = null;
   }
 
+  private getSourceTier = (source: string): number => SOURCE_TIERS[source] ?? 4;
+
+  private getSourceType = (source: string): SourceType =>
+    (SOURCE_TYPES[source] as SourceType | undefined) ?? 'other';
+
+  private isRecentDuplicate = (key: string): boolean => this.recentSignalKeys.has(key);
+
+  private markSignalSeen = (key: string): void => {
+    this.recentSignalKeys.add(key);
+    setTimeout(() => this.recentSignalKeys.delete(key), 30 * 60 * 1000);
+  };
+
+  private runClusterFallback(items: NewsItem[]): ClusteredEvent[] {
+    return clusterNewsCore(items, this.getSourceTier) as ClusteredEvent[];
+  }
+
+  private runCorrelationFallback(
+    clusters: ClusteredEvent[],
+    predictions: PredictionMarket[],
+    markets: MarketData[]
+  ): CorrelationSignal[] {
+    const { signals, snapshot } = analyzeCorrelationsCore(
+      clusters,
+      predictions,
+      markets,
+      this.fallbackSnapshot,
+      this.getSourceType,
+      this.isRecentDuplicate,
+      this.markSignalSeen
+    );
+    this.fallbackSnapshot = snapshot;
+    return signals as CorrelationSignal[];
+  }
+
   /**
    * Wait for worker to be ready
    */
   private async waitForReady(): Promise<void> {
+    if (this.workerUnavailableError) {
+      throw this.workerUnavailableError;
+    }
     this.initWorker();
     if (this.isReady) return;
     await this.readyPromise;
@@ -173,7 +219,14 @@ class AnalysisWorkerManager {
    * Runs O(n²) Jaccard similarity off the main thread.
    */
   async clusterNews(items: NewsItem[]): Promise<ClusteredEvent[]> {
-    await this.waitForReady();
+    try {
+      await this.waitForReady();
+    } catch (error) {
+      if (!this.workerUnavailableError) {
+        this.workerUnavailableError = error instanceof Error ? error : new Error(String(error));
+      }
+      return this.runClusterFallback(items);
+    }
 
     return new Promise((resolve, reject) => {
       const id = this.generateId();
@@ -208,7 +261,14 @@ class AnalysisWorkerManager {
     predictions: PredictionMarket[],
     markets: MarketData[]
   ): Promise<CorrelationSignal[]> {
-    await this.waitForReady();
+    try {
+      await this.waitForReady();
+    } catch (error) {
+      if (!this.workerUnavailableError) {
+        this.workerUnavailableError = error instanceof Error ? error : new Error(String(error));
+      }
+      return this.runCorrelationFallback(clusters, predictions, markets);
+    }
 
     return new Promise((resolve, reject) => {
       const id = this.generateId();
@@ -250,6 +310,8 @@ class AnalysisWorkerManager {
     if (this.worker) {
       this.worker.postMessage({ type: 'reset' });
     }
+    this.fallbackSnapshot = null;
+    this.recentSignalKeys.clear();
   }
 
   /**
@@ -263,6 +325,9 @@ class AnalysisWorkerManager {
       this.pendingRequests.delete(id);
     }
     this.cleanup();
+    this.workerUnavailableError = null;
+    this.fallbackSnapshot = null;
+    this.recentSignalKeys.clear();
   }
 
   /**

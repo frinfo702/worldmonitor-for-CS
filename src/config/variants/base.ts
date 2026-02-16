@@ -19,6 +19,8 @@ export const API_URLS = {
   // Tech variant APIs
   arxiv: (category: string = 'cs.AI', maxResults: number = 50) =>
     `/api/arxiv?category=${encodeURIComponent(category)}&max_results=${maxResults}`,
+  aiPapers: (limit: number = 36, llm: number = 5) =>
+    `/api/ai-papers?limit=${limit}&llm=${llm}`,
   githubTrending: (language: string = 'python', since: string = 'daily') =>
     `/api/github-trending?language=${encodeURIComponent(language)}&since=${since}`,
   hackernews: (type: string = 'top', limit: number = 30) =>

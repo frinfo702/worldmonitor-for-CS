@@ -17,6 +17,10 @@ export interface NewsItem {
   link: string;
   pubDate: Date;
   isAlert: boolean;
+  summary?: string;
+  metadata?: string;
+  trustScore?: number;
+  accepted?: boolean;
   monitorColor?: string;
   tier?: number;
   threat?: import('@/services/threat-classifier').ThreatClassification;

@@ -204,8 +204,16 @@ export const SOURCE_TIERS: Record<string, number> = {
   'Yahoo Finance': 4,
   'TechCrunch Layoffs': 4,
   'ArXiv AI': 4,
+  'arXiv cs.AI': 4,
+  'arXiv cs.LG': 4,
+  'arXiv cs.CL': 4,
+  'arXiv cs.CV': 4,
   'AI News': 4,
   'Layoffs News': 4,
+  // Trusted AI conference proceedings
+  'NeurIPS': 1,
+  'ICLR': 1,
+  'ICML': 1,
 };
 
 export function getSourceTier(sourceName: string): number {
@@ -249,7 +257,9 @@ export const SOURCE_TYPES: Record<string, SourceType> = {
   'Hacker News': 'tech', 'Ars Technica': 'tech', 'The Verge': 'tech',
   'The Verge AI': 'tech', 'MIT Tech Review': 'tech', 'TechCrunch Layoffs': 'tech',
   'AI News': 'tech', 'ArXiv AI': 'tech', 'VentureBeat AI': 'tech',
+  'arXiv cs.AI': 'tech', 'arXiv cs.LG': 'tech', 'arXiv cs.CL': 'tech', 'arXiv cs.CV': 'tech',
   'Layoffs.fyi': 'tech', 'Layoffs News': 'tech',
+  'NeurIPS': 'tech', 'ICLR': 'tech', 'ICML': 'tech',
 
   // Regional Tech Startups
   'EU Startups': 'tech', 'Tech.eu': 'tech', 'Sifted (Europe)': 'tech',

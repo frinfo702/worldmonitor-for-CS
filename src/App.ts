@@ -12,7 +12,7 @@ import {
   STORAGE_KEYS,
   SITE_VARIANT,
 } from '@/config';
-import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, saveSnapshot, cleanOldSnapshots, analysisWorker, fetchPizzIntStatus, fetchGdeltTensions, fetchNaturalEvents, fetchRecentAwards, fetchOilAnalytics, fetchCyberThreats, drainTrendingSignals } from '@/services';
+import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, saveSnapshot, cleanOldSnapshots, analysisWorker, fetchPizzIntStatus, fetchGdeltTensions, fetchNaturalEvents, fetchRecentAwards, fetchOilAnalytics, fetchCyberThreats, drainTrendingSignals, fetchAIPapers, mapAIPapersToNewsItems } from '@/services';
 import { fetchCountryMarkets } from '@/services/polymarket';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
@@ -1774,6 +1774,14 @@ export class App {
     this.newsPanels['ai'] = aiPanel;
     this.panels['ai'] = aiPanel;
 
+    const aiPapersPanel = new NewsPanel('ai-papers', 'AI Papers (Trusted)', {
+      clusteredMode: false,
+      showSummarizeButton: false,
+    });
+    this.attachRelatedAssetHandlers(aiPapersPanel);
+    this.newsPanels['ai-papers'] = aiPapersPanel;
+    this.panels['ai-papers'] = aiPapersPanel;
+
     // Tech variant panels
     const startupsPanel = new NewsPanel('startups', 'Startups & VC');
     this.attachRelatedAssetHandlers(startupsPanel);
@@ -2821,6 +2829,42 @@ export class App {
     }
   }
 
+  private async loadAIPapers(): Promise<NewsItem[]> {
+    const panel = this.newsPanels['ai-papers'];
+    if (!panel) return [];
+
+    try {
+      const feed = await fetchAIPapers(40);
+      const items = mapAIPapersToNewsItems(feed.papers);
+
+      if (items.length === 0) {
+        panel.showError('No papers available');
+        this.statusPanel?.updateFeed('AI Papers', { status: 'warning', itemCount: 0 });
+        return [];
+      }
+
+      panel.renderNews(items);
+
+      const baseline = await updateBaseline('news:ai-papers', items.length);
+      const deviation = calculateDeviation(items.length, baseline);
+      panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+
+      this.statusPanel?.updateFeed('AI Papers', { status: 'ok', itemCount: items.length });
+      this.statusPanel?.updateApi('OpenReview / arXiv', { status: 'ok' });
+      dataFreshness.recordUpdate('rss', items.length);
+
+      return items;
+    } catch (error) {
+      panel.showError('Failed to load AI papers');
+      this.statusPanel?.updateFeed('AI Papers', {
+        status: 'error',
+        errorMessage: String(error),
+      });
+      this.statusPanel?.updateApi('OpenReview / arXiv', { status: 'error' });
+      return [];
+    }
+  }
+
   private async loadNews(): Promise<void> {
     // Build categories dynamically based on what feeds exist
     const allCategories = [
@@ -2894,6 +2938,12 @@ export class App {
           console.error('[App] Intel feed failed:', intelResult[0]?.reason);
         }
       }
+    }
+
+    // Trusted AI papers stream - tech variant only
+    if (SITE_VARIANT === 'tech') {
+      const aiPapers = await this.loadAIPapers();
+      collectedNews.push(...aiPapers);
     }
 
     this.allNews = collectedNews;

@@ -4,7 +4,7 @@ import type { NewsItem, ClusteredEvent, DeviationLevel, RelatedAsset, RelatedAss
 import { THREAT_PRIORITY, THREAT_COLORS } from '@/services/threat-classifier';
 import { formatTime } from '@/utils';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
-import { analysisWorker, enrichWithVelocityML, getClusterAssetContext, getAssetLabel, MAX_DISTANCE_KM, activityTracker, generateSummary } from '@/services';
+import { analysisWorker, clusterNews, enrichWithVelocityML, getClusterAssetContext, getAssetLabel, MAX_DISTANCE_KM, activityTracker, generateSummary } from '@/services';
 import { getSourcePropagandaRisk, getSourceTier, getSourceType } from '@/config/feeds';
 import { SITE_VARIANT } from '@/config';
 
@@ -20,6 +20,11 @@ interface PreparedCluster {
   isNew: boolean;
   shouldHighlight: boolean;
   showNewTag: boolean;
+}
+
+interface NewsPanelOptions {
+  clusteredMode?: boolean;
+  showSummarizeButton?: boolean;
 }
 
 export class NewsPanel extends Panel {
@@ -42,10 +47,13 @@ export class NewsPanel extends Panel {
   private currentHeadlines: string[] = [];
   private isSummarizing = false;
 
-  constructor(id: string, title: string) {
+  constructor(id: string, title: string, options: NewsPanelOptions = {}) {
     super({ id, title, showCount: true, trackActivity: true });
+    this.clusteredMode = options.clusteredMode ?? true;
     this.createDeviationIndicator();
-    this.createSummarizeButton();
+    if (options.showSummarizeButton ?? true) {
+      this.createSummarizeButton();
+    }
     this.setupActivityTracking();
     this.initWindowedList();
   }
@@ -247,7 +255,13 @@ export class NewsPanel extends Panel {
     const requestId = ++this.renderRequestId;
 
     try {
-      const clusters = await analysisWorker.clusterNews(items);
+      let clusters: ClusteredEvent[];
+      try {
+        clusters = await analysisWorker.clusterNews(items);
+      } catch (workerError) {
+        console.warn('[NewsPanel] Worker clustering failed, falling back to main thread:', workerError);
+        clusters = clusterNews(items);
+      }
       if (requestId !== this.renderRequestId) return;
       const enriched = await enrichWithVelocityML(clusters);
       this.renderClusters(enriched);
@@ -263,16 +277,27 @@ export class NewsPanel extends Panel {
 
     const html = items
       .map(
-        (item) => `
+        (item) => {
+          const trustBadge = item.trustScore != null
+            ? `<span class="trust-badge ${item.trustScore >= 95 ? 'high' : item.trustScore >= 80 ? 'medium' : 'low'}">T${Math.round(item.trustScore)}</span>`
+            : '';
+          const acceptedBadge = item.accepted ? '<span class="accepted-tag">ACCEPTED</span>' : '';
+
+          return `
       <div class="item ${item.isAlert ? 'alert' : ''}" ${item.monitorColor ? `style="border-left-color: ${escapeHtml(item.monitorColor)}"` : ''}>
         <div class="item-source">
           ${escapeHtml(item.source)}
+          ${trustBadge}
+          ${acceptedBadge}
           ${item.isAlert ? '<span class="alert-tag">ALERT</span>' : ''}
         </div>
         <a class="item-title" href="${sanitizeUrl(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        ${item.summary ? `<div class="item-summary">${escapeHtml(item.summary)}</div>` : ''}
+        ${item.metadata ? `<div class="item-meta">${escapeHtml(item.metadata)}</div>` : ''}
         <div class="item-time">${formatTime(item.pubDate)}</div>
       </div>
-    `
+    `;
+        }
       )
       .join('');
 

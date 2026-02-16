@@ -123,6 +123,7 @@ const TECH_PANELS: Record<string, PanelConfig> = {
   'live-news': { name: 'Tech Headlines', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
   ai: { name: 'AI/ML News', enabled: true, priority: 1 },
+  'ai-papers': { name: 'AI Papers (Trusted)', enabled: true, priority: 1 },
   tech: { name: 'Technology', enabled: true, priority: 1 },
   startups: { name: 'Startups & VC', enabled: true, priority: 1 },
   vcblogs: { name: 'VC Insights & Essays', enabled: true, priority: 1 },

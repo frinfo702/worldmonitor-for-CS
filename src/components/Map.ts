@@ -154,6 +154,7 @@ export class MapComponent {
   constructor(container: HTMLElement, initialState: MapState) {
     this.container = container;
     this.state = initialState;
+    this.state.layers.datacenters = false;
     this.hotspots = [...INTEL_HOTSPOTS];
 
     this.wrapper = document.createElement('div');
@@ -336,7 +337,7 @@ export class MapComponent {
       'conflicts', 'hotspots', 'sanctions', 'protests',  // geopolitical
       'bases', 'nuclear', 'irradiators',                 // military/strategic
       'military',                                         // military tracking (flights + vessels)
-      'cables', 'pipelines', 'outages', 'datacenters',   // infrastructure
+      'cables', 'pipelines', 'outages',                   // infrastructure
       // cyberThreats is intentionally hidden on SVG/mobile fallback (DeckGL desktop only)
       'ais', 'flights',                                   // transport
       'natural', 'weather',                               // natural
@@ -345,7 +346,7 @@ export class MapComponent {
     ];
     const techLayers: (keyof MapLayers)[] = [
       'hotspots',                                         // research/product hubs
-      'datacenters', 'startupHubs', 'cloudRegions',      // product infrastructure
+      'startupHubs', 'cloudRegions',                      // product infrastructure
       'accelerators', 'techHQs', 'techEvents',           // tech ecosystem
     ];
     const layers = SITE_VARIANT === 'tech' ? techLayers : fullLayers;
@@ -402,7 +403,6 @@ export class MapComponent {
         <div class="layer-help-section">
           <div class="layer-help-title">Infrastructure</div>
           <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS, Azure, GCP data center regions</div>
-          <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs</div>
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Other</div>
@@ -442,7 +442,6 @@ export class MapComponent {
           <div class="layer-help-item"><span>CABLES</span> Major undersea fiber optic cables (20 backbone routes)</div>
           <div class="layer-help-item"><span>PIPELINES</span> Oil/gas pipelines (Nord Stream, TAPI, etc.)</div>
           <div class="layer-help-item"><span>OUTAGES</span> Internet blackouts and disruptions</div>
-          <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs only</div>
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Transport</div>
@@ -509,7 +508,6 @@ export class MapComponent {
         <div class="map-legend-item"><span class="legend-dot" style="background:#f59e0b"></span>CLOUD REGION</div>
         <div class="map-legend-item"><span class="map-legend-icon" style="color:#ff6600">🎯</span>ACCELERATOR</div>
         <div class="map-legend-item"><span class="map-legend-icon" style="color:#a855f7">📅</span>TECH EVENT</div>
-        <div class="map-legend-item"><span class="map-legend-icon" style="color:#4ecdc4">💾</span>DATACENTER</div>
       `;
     } else {
       // Geopolitical variant legend

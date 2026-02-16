@@ -21,7 +21,6 @@ import type {
   CableAdvisory,
   RepairShip,
   SocialUnrestEvent,
-  AIDataCenter,
   AirportDelayAlert,
   MilitaryFlight,
   MilitaryVessel,
@@ -34,7 +33,6 @@ import type {
   MapProtestCluster,
   MapTechHQCluster,
   MapTechEventCluster,
-  MapDatacenterCluster,
   CyberThreat,
   ResearchProductHotspot,
 } from '@/types';
@@ -256,11 +254,9 @@ export class DeckGLMap {
   private protestSC: Supercluster | null = null;
   private techHQSC: Supercluster | null = null;
   private techEventSC: Supercluster | null = null;
-  private datacenterSC: Supercluster | null = null;
   private protestClusters: MapProtestCluster[] = [];
   private techHQClusters: MapTechHQCluster[] = [];
   private techEventClusters: MapTechEventCluster[] = [];
-  private datacenterClusters: MapDatacenterCluster[] = [];
   private lastSCZoom = -1;
   private lastSCBoundsKey = '';
   private lastSCMask = '';
@@ -275,10 +271,10 @@ export class DeckGLMap {
   constructor(container: HTMLElement, initialState: DeckMapState) {
     this.container = container;
     this.state = initialState;
+    this.state.layers.datacenters = false;
     this.hotspots = [...INTEL_HOTSPOTS];
 
     this.rebuildTechHQSupercluster();
-    this.rebuildDatacenterSupercluster();
 
     this.debouncedRebuildLayers = debounce(() => {
       if (this.renderPaused) return;
@@ -561,42 +557,6 @@ export class DeckGLMap {
     this.lastSCZoom = -1;
   }
 
-  private rebuildDatacenterSupercluster(): void {
-    const activeDCs = AI_DATA_CENTERS.filter(dc => dc.status !== 'decommissioned');
-    const points = activeDCs.map((dc, i) => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [dc.lon, dc.lat] as [number, number] },
-      properties: {
-        index: i,
-        country: dc.country,
-        chipCount: dc.chipCount,
-        powerMW: dc.powerMW ?? 0,
-        status: dc.status,
-      },
-    }));
-    this.datacenterSC = new Supercluster({
-      radius: 70,
-      maxZoom: 14,
-      map: (props: Record<string, unknown>) => ({
-        index: Number(props.index ?? 0),
-        country: String(props.country ?? ''),
-        totalChips: Number(props.chipCount ?? 0) || 0,
-        totalPowerMW: Number(props.powerMW ?? 0) || 0,
-        existingCount: props.status === 'existing' ? 1 : 0,
-        plannedCount: props.status === 'planned' ? 1 : 0,
-      }),
-      reduce: (acc: Record<string, unknown>, props: Record<string, unknown>) => {
-        acc.totalChips = Number(acc.totalChips ?? 0) + Number(props.totalChips ?? 0);
-        acc.totalPowerMW = Number(acc.totalPowerMW ?? 0) + Number(props.totalPowerMW ?? 0);
-        acc.existingCount = Number(acc.existingCount ?? 0) + Number(props.existingCount ?? 0);
-        acc.plannedCount = Number(acc.plannedCount ?? 0) + Number(props.plannedCount ?? 0);
-        if (!acc.country && props.country) acc.country = props.country;
-      },
-    });
-    this.datacenterSC.load(points);
-    this.lastSCZoom = -1;
-  }
-
   private updateClusterData(): void {
     const zoom = Math.floor(this.maplibreMap?.getZoom() ?? 2);
     const bounds = this.maplibreMap?.getBounds();
@@ -609,8 +569,7 @@ export class DeckGLMap {
     const useProtests = layers.protests && this.protests.length > 0;
     const useTechHQ = SITE_VARIANT === 'tech' && layers.techHQs;
     const useTechEvents = SITE_VARIANT === 'tech' && layers.techEvents && this.techEvents.length > 0;
-    const useDatacenterClusters = layers.datacenters && zoom < 5;
-    const layerMask = `${Number(useProtests)}${Number(useTechHQ)}${Number(useTechEvents)}${Number(useDatacenterClusters)}`;
+    const layerMask = `${Number(useProtests)}${Number(useTechHQ)}${Number(useTechEvents)}`;
     if (zoom === this.lastSCZoom && boundsKey === this.lastSCBoundsKey && layerMask === this.lastSCMask) return;
     this.lastSCZoom = zoom;
     this.lastSCBoundsKey = boundsKey;
@@ -751,48 +710,6 @@ export class DeckGLMap {
       this.techEventClusters = [];
     }
 
-    if (useDatacenterClusters && this.datacenterSC) {
-      const activeDCs = AI_DATA_CENTERS.filter(dc => dc.status !== 'decommissioned');
-      this.datacenterClusters = this.datacenterSC.getClusters(bbox, zoom).map(f => {
-        const coords = f.geometry.coordinates as [number, number];
-        if (f.properties.cluster) {
-          const props = f.properties as Record<string, unknown>;
-          const leaves = this.datacenterSC!.getLeaves(f.properties.cluster_id!, DeckGLMap.MAX_CLUSTER_LEAVES);
-          const items = leaves.map(l => activeDCs[l.properties.index]).filter((x): x is AIDataCenter => !!x);
-          const clusterCount = Number(f.properties.point_count ?? items.length);
-          const existingCount = Number(props.existingCount ?? 0);
-          const plannedCount = Number(props.plannedCount ?? 0);
-          const totalChips = Number(props.totalChips ?? 0);
-          const totalPowerMW = Number(props.totalPowerMW ?? 0);
-          return {
-            id: `dc-${f.properties.cluster_id}`,
-            lat: coords[1], lon: coords[0],
-            count: clusterCount,
-            items,
-            region: String(props.country ?? items[0]?.country ?? ''),
-            country: String(props.country ?? items[0]?.country ?? ''),
-            totalChips,
-            totalPowerMW,
-            majorityExisting: existingCount >= Math.max(1, clusterCount / 2),
-            existingCount,
-            plannedCount,
-            sampled: items.length < clusterCount,
-          };
-        }
-        const item = activeDCs[f.properties.index]!;
-        return {
-          id: `dp-${f.properties.index}`, lat: item.lat, lon: item.lon,
-          count: 1, items: [item], region: item.country, country: item.country,
-          totalChips: item.chipCount, totalPowerMW: item.powerMW ?? 0,
-          majorityExisting: item.status === 'existing',
-          existingCount: item.status === 'existing' ? 1 : 0,
-          plannedCount: item.status === 'planned' ? 1 : 0,
-          sampled: false,
-        };
-      });
-    } else {
-      this.datacenterClusters = [];
-    }
   }
 
 
@@ -855,16 +772,6 @@ export class DeckGLMap {
         }
       } else {
         layers.push(...this.createHotspotsLayers());
-      }
-    }
-
-    // Datacenters layer - SQUARE icons at zoom >= 5, cluster dots at zoom < 5
-    const currentZoom = this.maplibreMap?.getZoom() || 2;
-    if (mapLayers.datacenters) {
-      if (currentZoom >= 5) {
-        layers.push(this.createDatacentersLayer());
-      } else {
-        layers.push(...this.createDatacenterClusterLayers());
       }
     }
 
@@ -1265,37 +1172,6 @@ export class DeckGLMap {
       pickable: true,
     });
   }
-
-
-  private createDatacentersLayer(): IconLayer {
-    const highlightedDC = this.highlightedAssets.datacenter;
-    const data = AI_DATA_CENTERS.filter(dc => dc.status !== 'decommissioned');
-
-    // Datacenters: SQUARE icons - purple color, semi-transparent for layering
-    return new IconLayer({
-      id: 'datacenters-layer',
-      data,
-      getPosition: (d) => [d.lon, d.lat],
-      getIcon: () => 'square',
-      iconAtlas: MARKER_ICONS.square,
-      iconMapping: { square: { x: 0, y: 0, width: 32, height: 32, mask: true } },
-      getSize: (d) => highlightedDC.has(d.id) ? 14 : 10,
-      getColor: (d) => {
-        if (highlightedDC.has(d.id)) {
-          return [255, 100, 100, 200] as [number, number, number, number];
-        }
-        if (d.status === 'planned') {
-          return [136, 68, 255, 100] as [number, number, number, number]; // Transparent for planned
-        }
-        return [136, 68, 255, 140] as [number, number, number, number]; // ~55% opacity
-      },
-      sizeScale: 1,
-      sizeMinPixels: 6,
-      sizeMaxPixels: 14,
-      pickable: true,
-    });
-  }
-
   private createEarthquakesLayer(): ScatterplotLayer {
     return new ScatterplotLayer({
       id: 'earthquakes-layer',
@@ -1884,49 +1760,6 @@ export class DeckGLMap {
     return layers;
   }
 
-  private createDatacenterClusterLayers(): Layer[] {
-    this.updateClusterData();
-    const layers: Layer[] = [];
-
-    layers.push(new ScatterplotLayer<MapDatacenterCluster>({
-      id: 'datacenter-clusters-layer',
-      data: this.datacenterClusters,
-      getPosition: d => [d.lon, d.lat],
-      getRadius: d => 15000 + d.count * 2000,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 20,
-      getFillColor: d => {
-        if (d.majorityExisting) return [160, 80, 255, 180] as [number, number, number, number];
-        return [80, 160, 255, 180] as [number, number, number, number];
-      },
-      pickable: true,
-      updateTriggers: { getRadius: this.lastSCZoom },
-    }));
-
-    layers.push(this.createGhostLayer('datacenter-clusters-layer', this.datacenterClusters, d => [d.lon, d.lat], { radiusMinPixels: 14 }));
-
-    const multiClusters = this.datacenterClusters.filter(c => c.count > 1);
-    if (multiClusters.length > 0) {
-      layers.push(new TextLayer<MapDatacenterCluster>({
-        id: 'datacenter-clusters-badge',
-        data: multiClusters,
-        getText: d => String(d.count),
-        getPosition: d => [d.lon, d.lat],
-        background: true,
-        getBackgroundColor: [0, 0, 0, 180],
-        backgroundPadding: [4, 2, 4, 2],
-        getColor: [255, 255, 255, 255],
-        getSize: 12,
-        getPixelOffset: [0, -14],
-        pickable: false,
-        fontFamily: 'system-ui, sans-serif',
-        fontWeight: 700,
-      }));
-    }
-
-    return layers;
-  }
-
   private createHotspotsLayers(): Layer[] {
     const zoom = this.maplibreMap?.getZoom() || 2;
     const zoomScale = Math.min(1, (zoom - 1) / 3);
@@ -2224,18 +2057,10 @@ export class DeckGLMap {
           return { html: `<div class="deckgl-tooltip"><strong>${text(ev?.title || '')}</strong><br/>${text(ev?.location || '')}</div>` };
         }
         return { html: `<div class="deckgl-tooltip"><strong>${obj.count} tech events</strong><br/>${text(obj.location)}</div>` };
-      case 'datacenter-clusters-layer':
-        if (obj.count === 1) {
-          const dc = obj.items?.[0];
-          return { html: `<div class="deckgl-tooltip"><strong>${text(dc?.name || '')}</strong><br/>${text(dc?.owner || '')}</div>` };
-        }
-        return { html: `<div class="deckgl-tooltip"><strong>${obj.count} data centers</strong><br/>${text(obj.country)}</div>` };
       case 'bases-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.country)}</div>` };
       case 'nuclear-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.type)}</div>` };
-      case 'datacenters-layer':
-        return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.owner)}</div>` };
       case 'cables-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>Undersea Cable</div>` };
       case 'pipelines-layer':
@@ -2415,38 +2240,12 @@ export class DeckGLMap {
       }
       return;
     }
-    if (layerId === 'datacenter-clusters-layer') {
-      const cluster = info.object as MapDatacenterCluster;
-      if (cluster.count === 1 && cluster.items[0]) {
-        this.popup.show({ type: 'datacenter', data: cluster.items[0], x: info.x, y: info.y });
-      } else {
-        this.popup.show({
-          type: 'datacenterCluster',
-          data: {
-            items: cluster.items,
-            region: cluster.region || cluster.country,
-            country: cluster.country,
-            count: cluster.count,
-            totalChips: cluster.totalChips,
-            totalPowerMW: cluster.totalPowerMW,
-            existingCount: cluster.existingCount,
-            plannedCount: cluster.plannedCount,
-            sampled: cluster.sampled,
-          },
-          x: info.x,
-          y: info.y,
-        });
-      }
-      return;
-    }
-
     // Map layer IDs to popup types
     const layerToPopupType: Record<string, PopupType> = {
       'conflict-zones-layer': 'conflict',
       'bases-layer': 'base',
       'nuclear-layer': 'nuclear',
       'irradiators-layer': 'irradiator',
-      'datacenters-layer': 'datacenter',
       'cables-layer': 'cable',
       'pipelines-layer': 'pipeline',
       'earthquakes-layer': 'earthquake',
@@ -2592,7 +2391,6 @@ export class DeckGLMap {
           { key: 'techHQs', label: 'Tech HQs', icon: '&#127970;' },
           { key: 'accelerators', label: 'Accelerators', icon: '&#9889;' },
           { key: 'cloudRegions', label: 'Cloud Regions', icon: '&#9729;' },
-          { key: 'datacenters', label: 'AI Data Centers', icon: '&#128421;' },
           { key: 'techEvents', label: 'Tech Events', icon: '&#128197;' },
         ]
       : [
@@ -2604,7 +2402,6 @@ export class DeckGLMap {
           { key: 'spaceports', label: 'Spaceports', icon: '&#128640;' },
           { key: 'cables', label: 'Undersea Cables', icon: '&#128268;' },
           { key: 'pipelines', label: 'Pipelines', icon: '&#128738;' },
-          { key: 'datacenters', label: 'AI Data Centers', icon: '&#128421;' },
           { key: 'military', label: 'Military Activity', icon: '&#9992;' },
           { key: 'ais', label: 'Ship Traffic', icon: '&#128674;' },
           { key: 'flights', label: 'Flight Delays', icon: '&#9992;' },
@@ -2703,7 +2500,6 @@ export class DeckGLMap {
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Infrastructure</div>
-          <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs</div>
           <div class="layer-help-item"><span>CLOUDREGIONS</span> AWS/Azure/GCP deployment regions</div>
         </div>
         <div class="layer-help-section">
@@ -2745,7 +2541,6 @@ export class DeckGLMap {
           <div class="layer-help-item"><span>CABLES</span> Major undersea fiber optic cables (20 backbone routes)</div>
           <div class="layer-help-item"><span>PIPELINES</span> Oil/gas pipelines (Nord Stream, TAPI, etc.)</div>
           <div class="layer-help-item"><span>OUTAGES</span> Internet blackouts and disruptions</div>
-          <div class="layer-help-item"><span>DATACENTERS</span> AI compute clusters ≥10,000 GPUs only</div>
         </div>
         <div class="layer-help-section">
           <div class="layer-help-title">Transport</div>
@@ -2811,7 +2606,6 @@ export class DeckGLMap {
           { shape: shapes.circle('rgb(255, 200, 0)'), label: 'Accelerator' },
           { shape: shapes.circle('rgb(150, 100, 255)'), label: 'Cloud Region' },
           { shape: shapes.triangle('rgb(168, 85, 247)'), label: 'Tech Event' },
-          { shape: shapes.square('rgb(136, 68, 255)'), label: 'Datacenter' },
         ]
       : [
           { shape: shapes.circle('rgb(255, 68, 68)'), label: 'High Alert' },
@@ -2819,7 +2613,6 @@ export class DeckGLMap {
           { shape: shapes.circle('rgb(255, 255, 0)'), label: 'Monitoring' },
           { shape: shapes.triangle('rgb(68, 136, 255)'), label: 'Base' },
           { shape: shapes.hexagon('rgb(255, 220, 0)'), label: 'Nuclear' },
-          { shape: shapes.square('rgb(136, 68, 255)'), label: 'Datacenter' },
         ];
 
     legend.innerHTML = `

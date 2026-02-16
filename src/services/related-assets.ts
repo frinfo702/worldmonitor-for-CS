@@ -5,7 +5,6 @@ import {
   MILITARY_BASES,
   UNDERSEA_CABLES,
   NUCLEAR_FACILITIES,
-  AI_DATA_CENTERS,
   PIPELINES,
 } from '@/config';
 
@@ -15,7 +14,7 @@ const MAX_ASSETS_PER_TYPE = 3;
 const ASSET_KEYWORDS: Record<AssetType, string[]> = {
   pipeline: ['pipeline', 'oil pipeline', 'gas pipeline', 'fuel pipeline', 'pipeline leak', 'pipeline spill'],
   cable: ['cable', 'undersea cable', 'subsea cable', 'fiber cable', 'fiber optic', 'internet cable'],
-  datacenter: ['datacenter', 'data center', 'server farm', 'colocation', 'hyperscale'],
+  datacenter: [],
   base: ['military base', 'airbase', 'naval base', 'base', 'garrison'],
   nuclear: ['nuclear', 'reactor', 'uranium', 'enrichment', 'nuclear plant'],
 };
@@ -110,7 +109,7 @@ function buildAssetIndex(type: AssetType): Array<{ id: string; name: string; lat
         return { id: cable.id, name: cable.name, lat: mid.lat, lon: mid.lon };
       });
     case 'datacenter':
-      return AI_DATA_CENTERS.map(dc => ({ id: dc.id, name: dc.name, lat: dc.lat, lon: dc.lon }));
+      return [];
     case 'base':
       return MILITARY_BASES.map(base => ({ id: base.id, name: base.name, lat: base.lat, lon: base.lon }));
     case 'nuclear':

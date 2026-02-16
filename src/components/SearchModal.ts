@@ -40,7 +40,7 @@ export class SearchModal {
   constructor(container: HTMLElement, options?: SearchModalOptions) {
     this.container = container;
     this.placeholder = options?.placeholder || 'Search news, pipelines, bases, markets...';
-    this.hint = options?.hint || 'News • Pipelines • Bases • Cables • Datacenters • Markets';
+    this.hint = options?.hint || 'News • Pipelines • Bases • Cables • Markets';
     this.loadRecentSearches();
   }
 

@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test';
 type LayerSnapshot = { id: string; dataCount: number };
 type OverlaySnapshot = {
   protestMarkers: number;
-  datacenterMarkers: number;
   techEventMarkers: number;
   techHQMarkers: number;
   hotspotMarkers: number;
@@ -55,7 +54,6 @@ const EXPECTED_FULL_DECK_LAYERS = [
   'irradiators-layer',
   'spaceports-layer',
   'hotspots-layer',
-  'datacenters-layer',
   'earthquakes-layer',
   'natural-events-layer',
   'fires-layer',
@@ -88,7 +86,6 @@ const EXPECTED_TECH_DECK_LAYERS = [
   'irradiators-layer',
   'spaceports-layer',
   'hotspots-layer',
-  'datacenters-layer',
   'earthquakes-layer',
   'natural-events-layer',
   'fires-layer',
@@ -246,21 +243,6 @@ test.describe('DeckGL map harness', () => {
           const w = window as HarnessWindow;
           const layers = w.__mapHarness?.getDeckLayerSnapshot() ?? [];
           return layers.find((layer) => layer.id === 'protest-clusters-layer')?.dataCount ?? 0;
-        });
-      }, { timeout: 20000 })
-      .toBeGreaterThan(0);
-
-    await page.evaluate(() => {
-      const w = window as HarnessWindow;
-      w.__mapHarness?.setZoom(3);
-    });
-
-    await expect
-      .poll(async () => {
-        return await page.evaluate(() => {
-          const w = window as HarnessWindow;
-          const layers = w.__mapHarness?.getDeckLayerSnapshot() ?? [];
-          return layers.find((layer) => layer.id === 'datacenter-clusters-layer')?.dataCount ?? 0;
         });
       }, { timeout: 20000 })
       .toBeGreaterThan(0);

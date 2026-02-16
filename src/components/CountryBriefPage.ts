@@ -10,7 +10,7 @@ import type { Port } from '@/config/ports';
 import { exportCountryBriefJSON, exportCountryBriefCSV } from '@/utils/export';
 import type { CountryBriefExport } from '@/utils/export';
 
-type BriefAssetType = AssetType | 'port';
+type BriefAssetType = Exclude<AssetType, 'datacenter'> | 'port';
 
 interface CountryIntelData {
   brief: string;
@@ -45,7 +45,6 @@ export class CountryBriefPage {
   private static INFRA_ICONS: Record<BriefAssetType, string> = {
     pipeline: '\u{1F50C}',
     cable: '\u{1F310}',
-    datacenter: '\u{1F5A5}\uFE0F',
     base: '\u{1F3DB}\uFE0F',
     nuclear: '\u2622\uFE0F',
     port: '\u2693',
@@ -54,7 +53,6 @@ export class CountryBriefPage {
   private static INFRA_LABELS: Record<BriefAssetType, string> = {
     pipeline: 'Pipelines',
     cable: 'Undersea Cables',
-    datacenter: 'Data Centers',
     base: 'Military Bases',
     nuclear: 'Nuclear Facilities',
     port: 'Ports',
@@ -483,7 +481,7 @@ export class CountryBriefPage {
     const centroidLat = (bounds.n + bounds.s) / 2;
     const centroidLon = (bounds.e + bounds.w) / 2;
 
-    const assets = getNearbyInfrastructure(centroidLat, centroidLon, ['pipeline', 'cable', 'datacenter', 'base', 'nuclear']);
+    const assets = getNearbyInfrastructure(centroidLat, centroidLon, ['pipeline', 'cable', 'base', 'nuclear']);
 
     const nearbyPorts = PORTS
       .map((p: Port) => ({ port: p, dist: haversineDistanceKm(centroidLat, centroidLon, p.lat, p.lon) }))
@@ -493,6 +491,7 @@ export class CountryBriefPage {
 
     const grouped = new Map<BriefAssetType, Array<{ name: string; distanceKm: number }>>();
     for (const a of assets) {
+      if (a.type === 'datacenter') continue;
       const list = grouped.get(a.type) || [];
       list.push({ name: a.name, distanceKm: a.distanceKm });
       grouped.set(a.type, list);
@@ -507,7 +506,7 @@ export class CountryBriefPage {
     const content = this.overlay.querySelector('.cb-infra-content');
     if (!section || !content) return;
 
-    const order: BriefAssetType[] = ['pipeline', 'cable', 'datacenter', 'base', 'nuclear', 'port'];
+    const order: BriefAssetType[] = ['pipeline', 'cable', 'base', 'nuclear', 'port'];
     let html = '';
     for (const type of order) {
       const items = grouped.get(type);

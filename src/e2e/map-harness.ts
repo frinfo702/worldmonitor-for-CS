@@ -13,7 +13,6 @@ import {
   PIPELINES,
   STRATEGIC_WATERWAYS,
   ECONOMIC_CENTERS,
-  AI_DATA_CENTERS,
   STARTUP_HUBS,
   ACCELERATORS,
   TECH_HQS,
@@ -60,7 +59,6 @@ type LayerSnapshot = {
 
 type OverlaySnapshot = {
   protestMarkers: number;
-  datacenterMarkers: number;
   techEventMarkers: number;
   techHQMarkers: number;
   hotspotMarkers: number;
@@ -143,7 +141,7 @@ const allLayersEnabled: MapLayers = {
   waterways: true,
   outages: true,
   cyberThreats: true,
-  datacenters: true,
+  datacenters: false,
   protests: true,
   flights: true,
   military: true,
@@ -284,7 +282,6 @@ const getDeckLayerSnapshot = (): LayerSnapshot[] => {
 
 const getOverlaySnapshot = (): OverlaySnapshot => ({
   protestMarkers: document.querySelectorAll('.protest-marker').length,
-  datacenterMarkers: document.querySelectorAll('.datacenter-marker').length,
   techEventMarkers: document.querySelectorAll('.tech-event-marker').length,
   techHQMarkers: document.querySelectorAll('.tech-hq-marker').length,
   hotspotMarkers: document.querySelectorAll('.hotspot').length,
@@ -343,7 +340,6 @@ const [nuclearLon, nuclearLat] = firstLatLon(NUCLEAR_FACILITIES, [14.0, 50.0]);
 const [irradiatorLon, irradiatorLat] = firstLatLon(GAMMA_IRRADIATORS, [12.0, 50.0]);
 const [waterwayLon, waterwayLat] = firstLatLon(STRATEGIC_WATERWAYS, [32.0, 30.0]);
 const [economicLon, economicLat] = firstLatLon(ECONOMIC_CENTERS, [-74.0, 40.7]);
-const [datacenterLon, datacenterLat] = firstLatLon(AI_DATA_CENTERS, [-121.9, 37.3]);
 const [spaceportLon, spaceportLat] = firstLatLon(SPACEPORTS, [-80.6, 28.6]);
 const [mineralLon, mineralLat] = firstLatLon(CRITICAL_MINERALS, [135.0, -27.0]);
 const [startupLon, startupLat] = firstLatLon(STARTUP_HUBS, [-122.08, 37.38]);
@@ -464,22 +460,6 @@ const VISUAL_SCENARIOS: VisualScenario[] = [
     enabledLayers: ['cyberThreats'],
     camera: seededCameras.cyber,
     expectedDeckLayers: ['cyber-threats-layer'],
-    expectedSelectors: [],
-  },
-  {
-    id: 'datacenters-cluster-z3',
-    variant: 'both',
-    enabledLayers: ['datacenters'],
-    camera: toCamera(datacenterLon, datacenterLat, 3.0),
-    expectedDeckLayers: [],
-    expectedSelectors: ['.datacenter-marker'],
-  },
-  {
-    id: 'datacenters-icons-z6',
-    variant: 'both',
-    enabledLayers: ['datacenters'],
-    camera: toCamera(datacenterLon, datacenterLat, 6.0),
-    expectedDeckLayers: ['datacenters-layer'],
     expectedSelectors: [],
   },
   {

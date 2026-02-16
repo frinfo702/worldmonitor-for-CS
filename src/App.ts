@@ -184,7 +184,6 @@ import {
   NUCLEAR_FACILITIES,
 } from "@/config/geo";
 import { PIPELINES } from "@/config/pipelines";
-import { AI_DATA_CENTERS } from "@/config/ai-datacenters";
 import { GAMMA_IRRADIATORS } from "@/config/irradiators";
 import { TECH_COMPANIES } from "@/config/tech-companies";
 import { AI_RESEARCH_LABS } from "@/config/ai-research-labs";
@@ -454,6 +453,7 @@ export class App {
       }
       this.mapLayers = this.initialUrlState.layers;
     }
+    this.mapLayers.datacenters = false;
     if (!CYBER_LAYER_ENABLED) {
       this.mapLayers.cyberThreats = false;
     }
@@ -1398,7 +1398,7 @@ export class App {
           }
         : {
             placeholder: "Search news, pipelines, bases, markets...",
-            hint: "News • Countries • Hotspots • Conflicts • Bases • Pipelines • Cables • Datacenters",
+            hint: "News • Countries • Hotspots • Conflicts • Bases • Pipelines • Cables",
           };
     this.searchModal = new SearchModal(this.container, searchOptions);
 
@@ -1434,16 +1434,6 @@ export class App {
           subtitle:
             `${s.ecosystemTier} ${s.topSectors?.join(" ") || ""} ${s.notableStartups?.join(" ") || ""}`.trim(),
           data: s,
-        })),
-      );
-
-      this.searchModal.registerSource(
-        "datacenter",
-        AI_DATA_CENTERS.map((d) => ({
-          id: d.id,
-          title: d.name,
-          subtitle: `${d.owner} ${d.chipType || ""}`.trim(),
-          data: d,
         })),
       );
 
@@ -1530,16 +1520,6 @@ export class App {
           title: c.name,
           subtitle: c.major ? "Major cable" : "",
           data: c,
-        })),
-      );
-
-      this.searchModal.registerSource(
-        "datacenter",
-        AI_DATA_CENTERS.map((d) => ({
-          id: d.id,
-          title: d.name,
-          subtitle: `${d.owner} ${d.chipType || ""}`.trim(),
-          data: d,
         })),
       );
 
@@ -1645,16 +1625,6 @@ export class App {
         this.mapLayers.cables = true;
         setTimeout(() => {
           this.map?.triggerCableClick(cable.id);
-        }, 300);
-        break;
-      }
-      case "datacenter": {
-        const dc = result.data as (typeof AI_DATA_CENTERS)[0];
-        this.map?.setView("global");
-        this.map?.enableLayer("datacenters");
-        this.mapLayers.datacenters = true;
-        setTimeout(() => {
-          this.map?.triggerDatacenterClick(dc.id);
         }, 300);
         break;
       }
@@ -2795,12 +2765,6 @@ export class App {
         this.mapLayers.cables = true;
         saveToStorage(STORAGE_KEYS.mapLayers, this.mapLayers);
         this.map.triggerCableClick(asset.id);
-        break;
-      case "datacenter":
-        this.map.enableLayer("datacenters");
-        this.mapLayers.datacenters = true;
-        saveToStorage(STORAGE_KEYS.mapLayers, this.mapLayers);
-        this.map.triggerDatacenterClick(asset.id);
         break;
       case "base":
         this.map.enableLayer("bases");

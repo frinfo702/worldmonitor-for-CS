@@ -149,7 +149,6 @@ import {
   PredictionPanel,
   MonitorPanel,
   Panel,
-  SignalModal,
   PlaybackControl,
   StatusPanel,
   EconomicPanel,
@@ -162,7 +161,6 @@ import {
   CascadePanel,
   StrategicRiskPanel,
   StrategicPosturePanel,
-  IntelligenceGapBadge,
   TechEventsPanel,
   ServiceStatusPanel,
   RuntimeConfigPanel,
@@ -233,7 +231,6 @@ export class App {
   private monitors: Monitor[];
   private panelSettings: Record<string, PanelConfig>;
   private mapLayers: MapLayers;
-  private signalModal: SignalModal | null = null;
   private playbackControl: PlaybackControl | null = null;
   private statusPanel: StatusPanel | null = null;
   private exportPanel: ExportPanel | null = null;
@@ -448,19 +445,6 @@ export class App {
     }
 
     this.renderLayout();
-    this.signalModal = new SignalModal();
-    this.signalModal.setLocationClickHandler((lat, lon) => {
-      this.map?.setCenter(lat, lon, 4);
-    });
-    const findingsBadge = new IntelligenceGapBadge();
-    findingsBadge.setOnSignalClick((signal) => {
-      if (this.countryBriefPage?.isVisible()) return;
-      this.signalModal?.showSignal(signal);
-    });
-    findingsBadge.setOnAlertClick((alert) => {
-      if (this.countryBriefPage?.isVisible()) return;
-      this.signalModal?.showAlert(alert);
-    });
     this.setupMobileWarning();
     this.setupPlaybackControl();
     this.setupStatusPanel();
@@ -4072,7 +4056,6 @@ export class App {
             if (surgeAlerts.length > 0) {
               const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
               addToSignalHistory(surgeSignals);
-              this.signalModal?.show(surgeSignals);
             }
             const foreignAlerts = detectForeignMilitaryPresence(
               flightData.flights,
@@ -4080,7 +4063,6 @@ export class App {
             if (foreignAlerts.length > 0) {
               const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
               addToSignalHistory(foreignSignals);
-              this.signalModal?.show(foreignSignals);
             }
           }
         } catch (error) {
@@ -4549,13 +4531,11 @@ export class App {
         if (surgeAlerts.length > 0) {
           const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
           addToSignalHistory(surgeSignals);
-          this.signalModal?.show(surgeSignals);
         }
         const foreignAlerts = detectForeignMilitaryPresence(flightData.flights);
         if (foreignAlerts.length > 0) {
           const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
           addToSignalHistory(foreignSignals);
-          this.signalModal?.show(foreignSignals);
         }
       }
 
@@ -4713,7 +4693,6 @@ export class App {
       const allSignals = [...signals, ...geoSignals, ...keywordSpikeSignals];
       if (allSignals.length > 0) {
         addToSignalHistory(allSignals);
-        this.signalModal?.show(allSignals);
       }
     } catch (error) {
       console.error("[App] Correlation analysis failed:", error);
